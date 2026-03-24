@@ -146,6 +146,7 @@
           <th style="width:90px">장</th>
           <th style="width:90px">유형</th>
           <th style="width:80px">담당</th>
+          <th style="width:90px">등록일</th>
         </tr>
       </thead>
       <tbody>
@@ -163,6 +164,7 @@
           <td class="small">{{ i.chapter or "" }}</td>
           <td class="small">{{ i.category or "" }}</td>
           <td class="small">{{ i.assignee or "" }}</td>
+          <td class="small text-muted reltime" data-time="{{ i.created_at or '' }}"></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -195,4 +197,25 @@
   <p>조건에 맞는 이슈가 없습니다.</p>
 </div>
 {% endif %}
+
+<script>
+function reltime(dateStr) {
+  if (!dateStr) return '';
+  const now = new Date();
+  const d = new Date(dateStr.replace(' ', 'T'));
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60)          return '방금 전';
+  if (diff < 3600)        return Math.floor(diff / 60) + '분 전';
+  if (diff < 86400)       return Math.floor(diff / 3600) + '시간 전';
+  if (diff < 86400 * 7)   return Math.floor(diff / 86400) + '일 전';
+  if (diff < 86400 * 30)  return Math.floor(diff / 86400 / 7) + '주 전';
+  if (diff < 86400 * 365) return Math.floor(diff / 86400 / 30) + '개월 전';
+  return Math.floor(diff / 86400 / 365) + '년 전';
+}
+document.querySelectorAll('.reltime').forEach(el => {
+  const t = el.dataset.time;
+  el.textContent = reltime(t);
+  el.title = t;
+});
+</script>
 {% endblock %}

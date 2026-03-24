@@ -311,6 +311,7 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
             "chapter": r["chapter"],
             "assignee": r["assignee"],
             "location": r["location"],
+            "created_at": r["created_at"],
         }
         for r in rows
     ]
