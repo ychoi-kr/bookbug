@@ -41,10 +41,11 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 # ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
 
 STATUS_LABEL = {
-    "open":        ("open",        "secondary"),
+    "open":        ("미결",         "secondary"),
     "in_progress": ("진행중",       "primary"),
     "resolved":    ("완료",         "success"),
-    "wontfix":     ("보류",         "warning"),
+    "wontfix":     ("수정안함",     "warning"),
+    "deferred":    ("보류",         "light"),
     "duplicate":   ("중복",         "info"),
 }
 
