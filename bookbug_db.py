@@ -232,8 +232,9 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int,
     except sqlite3.IntegrityError as e:
         return {"ok": False, "error": str(e)}
 
-def db_issue_get(conn: sqlite3.Connection, key_or_id: str):
+def db_issue_get(conn: sqlite3.Connection, key_or_id: str, project_slug: str = ""):
     """issue_key(정수 문자열) 또는 내부 id로 이슈 조회.
+    project_slug를 주면 해당 프로젝트 범위에서만 조회하며,
     크로스 프로젝트 형식 '{slug}#{N}'도 지원."""
     # slug#N 형식 처리
     if "#" in str(key_or_id):
@@ -245,18 +246,29 @@ def db_issue_get(conn: sqlite3.Connection, key_or_id: str):
             (slug, num)
         ).fetchone()
         return row
+    if project_slug:
+        row = conn.execute(
+            "SELECT i.* FROM issues i JOIN projects p ON i.project_id=p.id "
+            "WHERE p.slug=? AND i.issue_key=? AND i.deleted_at IS NULL AND p.deleted_at IS NULL",
+            (project_slug, str(key_or_id))
+        ).fetchone()
+        return row
+
     # 순수 정수 문자열 → issue_key로 먼저 조회
-    row = conn.execute(
-        "SELECT * FROM issues WHERE issue_key=? AND deleted_at IS NULL", (str(key_or_id),)
-    ).fetchone()
-    if not row:
-        try:
-            row = conn.execute(
-                "SELECT * FROM issues WHERE id=? AND deleted_at IS NULL", (int(key_or_id),)
-            ).fetchone()
-        except ValueError:
-            pass
-    return row
+    rows = conn.execute(
+        "SELECT * FROM issues WHERE issue_key=? AND deleted_at IS NULL ORDER BY id", (str(key_or_id),)
+    ).fetchall()
+    if len(rows) == 1:
+        return rows[0]
+    if len(rows) > 1:
+        return None
+    try:
+        row = conn.execute(
+            "SELECT * FROM issues WHERE id=? AND deleted_at IS NULL", (int(key_or_id),)
+        ).fetchone()
+        return row
+    except ValueError:
+        return None
 
 def db_issue_list(conn: sqlite3.Connection, project_id: int,
                   status: str = "", chapter: str = "", category: str = "",
