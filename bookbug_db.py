@@ -290,7 +290,7 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         order = ("CASE severity WHEN 'critical' THEN 1 WHEN 'major' THEN 2 "
                  "WHEN 'normal' THEN 3 WHEN 'minor' THEN 4 ELSE 5 END, " + order)
     elif sort == "updated":
-        order = "updated_at DESC"
+        order = "updated_at DESC, CAST(issue_key AS INTEGER) DESC"
     elif sort == "status":
         order = ("CASE status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 "
                  "WHEN 'deferred' THEN 3 WHEN 'resolved' THEN 4 ELSE 5 END, " + order)
@@ -298,6 +298,8 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         order = "CAST(issue_key AS INTEGER) ASC"
     elif sort == "key_desc":
         order = "CAST(issue_key AS INTEGER) DESC"
+    elif sort == "created":
+        order = "created_at DESC, CAST(issue_key AS INTEGER) DESC"
     query += f" ORDER BY {order}"
 
     rows = conn.execute(query, params).fetchall()
