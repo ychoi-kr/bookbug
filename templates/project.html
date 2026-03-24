@@ -111,6 +111,8 @@
         <label class="field-label">정렬</label>
         <select name="sort" class="form-select form-select-sm">
           <option value="default" {% if filters.sort == "default" %}selected{% endif %}>기본</option>
+          <option value="key_asc" {% if filters.sort == "key_asc" %}selected{% endif %}>번호 오름차순</option>
+          <option value="key_desc" {% if filters.sort == "key_desc" %}selected{% endif %}>번호 내림차순</option>
           <option value="severity" {% if filters.sort == "severity" %}selected{% endif %}>심각도순</option>
           <option value="chapter" {% if filters.sort == "chapter" %}selected{% endif %}>장순</option>
           <option value="updated" {% if filters.sort == "updated" %}selected{% endif %}>최근수정</option>

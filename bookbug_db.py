@@ -294,6 +294,10 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
     elif sort == "status":
         order = ("CASE status WHEN 'open' THEN 1 WHEN 'in_progress' THEN 2 "
                  "WHEN 'deferred' THEN 3 WHEN 'resolved' THEN 4 ELSE 5 END, " + order)
+    elif sort == "key_asc":
+        order = "CAST(issue_key AS INTEGER) ASC"
+    elif sort == "key_desc":
+        order = "CAST(issue_key AS INTEGER) DESC"
     query += f" ORDER BY {order}"
 
     rows = conn.execute(query, params).fetchall()
