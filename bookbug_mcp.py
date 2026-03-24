@@ -7,6 +7,7 @@ DB 위치: ~/.bookbug/bookbug.db
 
 from typing import Optional
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from bookbug_db import (
     get_db,
     db_project_create,
@@ -36,20 +37,22 @@ mcp = FastMCP(
 )
 
 
+
 def _resolve_issue(conn, issue: str, project: str = ""):
-    """issue 참조를 안전하게 해석한다. 프로젝트 간 키 충돌을 감지한다."""
+    """issue 참조를 안전하게 해석한다. 프로젝트 간 키 충돌을 감지한다.
+    이슈를 찾으면 row를 반환, 못 찾으면 ToolError를 raise한다."""
     if project:
         p = db_project_get(conn, project)
         if not p:
-            return None, {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+            raise ToolError(f"프로젝트 '{project}'를 찾을 수 없습니다")
         row = db_issue_get(conn, issue, project_slug=project)
         if not row:
-            return None, {"ok": False, "error": f"프로젝트 '{project}'에서 이슈 '{issue}'를 찾을 수 없습니다"}
-        return row, None
+            raise ToolError(f"프로젝트 '{project}'에서 이슈 '{issue}'를 찾을 수 없습니다")
+        return row
 
     row = db_issue_get(conn, issue)
     if row:
-        return row, None
+        return row
 
     if "#" not in str(issue):
         conflict = conn.execute(
@@ -57,15 +60,12 @@ def _resolve_issue(conn, issue: str, project: str = ""):
             (str(issue),)
         ).fetchone()[0]
         if conflict > 1:
-            return None, {
-                "ok": False,
-                "error": (
-                    f"이슈 키 '{issue}'가 여러 프로젝트에 존재합니다. "
-                    "project 파라미터를 지정하거나 'slug#issue_key' 형식을 사용해 주세요"
-                ),
-            }
+            raise ToolError(
+                f"이슈 키 '{issue}'가 여러 프로젝트에 존재합니다. "
+                "project 파라미터를 지정하거나 'slug#issue_key' 형식을 사용해 주세요"
+            )
 
-    return None, {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+    raise ToolError(f"이슈 '{issue}'를 찾을 수 없습니다")
 
 # ─── 프로젝트 관리 ─────────────────────────────────────────────────────────────
 
@@ -152,9 +152,7 @@ def issue_list(
 def issue_show(issue: str, project: str = "") -> dict:
     """이슈의 전체 상세 정보를 반환한다. 태그와 변경 이력 포함."""
     with get_db() as conn:
-        row, err = _resolve_issue(conn, issue, project)
-        if err:
-            return err
+        row = _resolve_issue(conn, issue, project)
         ref = f"{project}#{row['issue_key']}" if project else issue
         data = db_issue_show(conn, ref)
     return data
@@ -195,9 +193,7 @@ def issue_update(
         return {"ok": False, "error": f"유효하지 않은 심각도: '{updates['severity']}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
 
     with get_db() as conn:
-        row, err = _resolve_issue(conn, issue, project)
-        if err:
-            return err
+        row = _resolve_issue(conn, issue, project)
         updated_fields = db_issue_update(conn, row["id"], row, updates, changed_by)
     return {"ok": True, "issue_key": row["issue_key"], "updated_fields": updated_fields}
 
@@ -206,9 +202,7 @@ def issue_update(
 def issue_resolve(issue: str, project: str = "", resolution: str = "", resolved_by: str = "") -> dict:
     """이슈를 resolved 상태로 변경하는 단축 tool."""
     with get_db() as conn:
-        row, err = _resolve_issue(conn, issue, project)
-        if err:
-            return err
+        row = _resolve_issue(conn, issue, project)
         updates = {"status": "resolved"}
         if resolution:
             updates["resolution"] = resolution
@@ -301,9 +295,7 @@ def project_stats(project: str) -> dict:
 def issue_history(issue: str, project: str = "") -> dict:
     """특정 이슈의 변경 이력을 반환한다."""
     with get_db() as conn:
-        row, err = _resolve_issue(conn, issue, project)
-        if err:
-            return err
+        row = _resolve_issue(conn, issue, project)
         history_rows = conn.execute(
             "SELECT * FROM issue_history WHERE issue_id=? ORDER BY changed_at",
             (row["id"],)

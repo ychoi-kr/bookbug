@@ -107,21 +107,7 @@ def get_db():
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT NULL")
             conn.commit()
-    # issue_key 마이그레이션: PREFIX-N → N (정수 문자열)
-    old_keys = conn.execute(
-        "SELECT id, issue_key FROM issues WHERE issue_key LIKE '%-%'"
-    ).fetchall()
-    if old_keys:
-        for row in old_keys:
-            raw = row[1]
-            dash = raw.rfind("-")
-            num_part = raw[dash+1:] if dash >= 0 else raw
-            try:
-                int(num_part)
-                conn.execute("UPDATE issues SET issue_key=? WHERE id=?", (num_part, row[0]))
-            except ValueError:
-                pass
-        conn.commit()
+
     try:
         yield conn
     finally:

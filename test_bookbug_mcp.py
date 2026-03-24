@@ -134,8 +134,9 @@ class TestIssueTools(unittest.TestCase):
         self.assertIn("history", detail)
 
     def test_issue_show_not_found(self):
-        r = mcp.issue_show("9999")
-        self.assertFalse(r["ok"])
+        from fastmcp.exceptions import ToolError
+        with self.assertRaises(ToolError):
+            mcp.issue_show("9999")
 
     def test_issue_update_status(self):
         k = mcp.issue_add("test-book", "업데이트 테스트")["issue_key"]
@@ -162,8 +163,9 @@ class TestIssueTools(unittest.TestCase):
         self.assertFalse(r["ok"])
 
     def test_issue_update_not_found(self):
-        r = mcp.issue_update("9999", status="resolved")
-        self.assertFalse(r["ok"])
+        from fastmcp.exceptions import ToolError
+        with self.assertRaises(ToolError):
+            mcp.issue_update("9999", status="resolved")
 
     def test_issue_resolve(self):
         k = mcp.issue_add("test-book", "해결 테스트")["issue_key"]
@@ -176,8 +178,9 @@ class TestIssueTools(unittest.TestCase):
         self.assertIsNotNone(detail["resolved_at"])
 
     def test_issue_resolve_not_found(self):
-        r = mcp.issue_resolve("9999")
-        self.assertFalse(r["ok"])
+        from fastmcp.exceptions import ToolError
+        with self.assertRaises(ToolError):
+            mcp.issue_resolve("9999")
 
 
 class TestIssueProjectScoping(unittest.TestCase):
@@ -190,9 +193,10 @@ class TestIssueProjectScoping(unittest.TestCase):
         mcp.issue_add("proj-b", "B 이슈 1")
 
     def test_issue_show_ambiguous_without_project(self):
-        r = mcp.issue_show("1")
-        self.assertFalse(r["ok"])
-        self.assertIn("여러 프로젝트", r["error"])
+        from fastmcp.exceptions import ToolError
+        with self.assertRaises(ToolError) as ctx:
+            mcp.issue_show("1")
+        self.assertIn("여러 프로젝트", str(ctx.exception))
 
     def test_issue_show_with_project(self):
         r = mcp.issue_show("1", project="proj-b")
@@ -308,8 +312,9 @@ class TestStatsAndHistory(unittest.TestCase):
         self.assertGreaterEqual(len(r["history"]), 2)
 
     def test_issue_history_not_found(self):
-        r = mcp.issue_history("9999")
-        self.assertFalse(r["ok"])
+        from fastmcp.exceptions import ToolError
+        with self.assertRaises(ToolError):
+            mcp.issue_history("9999")
 
 
 class TestSearchIssues(unittest.TestCase):
