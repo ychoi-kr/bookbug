@@ -21,16 +21,16 @@
           {% endif %}
           <div class="d-flex gap-2 flex-wrap">
             {% if p.open_count %}
-            <span class="badge bg-secondary">open {{ p.open_count }}</span>
+            <span class="badge bg-secondary">열림 {{ p.open_count }}</span>
             {% endif %}
             {% if p.in_progress_count %}
-            <span class="badge bg-primary">진행중 {{ p.in_progress_count }}</span>
+            <span class="badge bg-primary">진행 {{ p.in_progress_count }}</span>
             {% endif %}
             {% if p.resolved_count %}
-            <span class="badge bg-success">완료 {{ p.resolved_count }}</span>
+            <span class="badge bg-success">해결 {{ p.resolved_count }}</span>
             {% endif %}
             {% if p.wontfix_count %}
-            <span class="badge bg-warning text-dark">보류 {{ p.wontfix_count }}</span>
+            <span class="badge bg-warning text-dark">유지 {{ p.wontfix_count }}</span>
             {% endif %}
             {% if total == 0 %}
             <span class="text-muted small">이슈 없음</span>

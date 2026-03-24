@@ -30,7 +30,7 @@
 {# ── 통계 바 ── #}
 {% if stats %}
 <div class="d-flex gap-2 mb-3 flex-wrap">
-  {% for s in [("open","secondary","미결"), ("in_progress","primary","진행중"), ("resolved","success","완료"), ("wontfix","warning","수정안함"), ("deferred","light","보류"), ("duplicate","info","중복")] %}
+  {% for s in [("open","secondary","열림"), ("in_progress","primary","진행"), ("resolved","success","해결"), ("wontfix","warning","유지"), ("deferred","light","보류"), ("duplicate","info","중복")] %}
   {% set cnt = stats.by_status.get(s[0], 0) %}
   {% if cnt %}
   <a href="?status={{ s[0] }}" class="text-decoration-none">
