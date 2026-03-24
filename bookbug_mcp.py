@@ -1,0 +1,330 @@
+#!/usr/bin/env python3
+"""bookbug_mcp — 출판 원고 교정용 이슈 트래커 MCP 서버
+
+FastMCP + Streamable HTTP 기반. 포트 8419.
+DB 위치: ~/.bookbug/bookbug.db
+"""
+
+from typing import Optional
+from fastmcp import FastMCP
+from bookbug_db import (
+    get_db,
+    slug_to_prefix,
+    db_project_create,
+    db_project_list,
+    db_project_show,
+    db_project_stats,
+    db_project_get,
+    db_project_delete,
+    db_issue_add,
+    db_issue_get,
+    db_issue_list,
+    db_issue_show,
+    db_issue_update,
+    db_issue_delete,
+    db_tag_add,
+    db_tag_remove,
+    db_tag_list,
+    db_import_xlsx,
+    db_export_issues,
+    VALID_STATUSES,
+    VALID_SEVERITIES,
+)
+
+mcp = FastMCP(
+    name="bookbug",
+    instructions="출판 원고 교정용 이슈 트래커",
+)
+
+# ─── 프로젝트 관리 ─────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def project_create(slug: str, title: str, description: str = "", base_path: str = "") -> dict:
+    """프로젝트를 생성한다."""
+    with get_db() as conn:
+        return db_project_create(conn, slug, title, description, base_path)
+
+
+@mcp.tool()
+def project_list() -> dict:
+    """전체 프로젝트 목록과 이슈 수 요약을 반환한다."""
+    with get_db() as conn:
+        return {"projects": db_project_list(conn)}
+
+
+@mcp.tool()
+def project_show(slug: str) -> dict:
+    """프로젝트 상세 정보와 상태별 이슈 집계를 반환한다."""
+    with get_db() as conn:
+        result = db_project_show(conn, slug)
+    if result is None:
+        return {"ok": False, "error": f"프로젝트 '{slug}'를 찾을 수 없습니다"}
+    return result
+
+
+@mcp.tool()
+def project_delete(slug: str) -> dict:
+    """프로젝트를 소프트 딜리트한다. 데이터는 보존되며 목록에서만 숨겨진다."""
+    with get_db() as conn:
+        return db_project_delete(conn, slug)
+
+# ─── 이슈 CRUD ────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def issue_add(
+    project: str,
+    title: str,
+    description: str = "",
+    category: str = "",
+    severity: str = "normal",
+    location: str = "",
+    chapter: str = "",
+    assignee: str = "",
+    reporter: str = "claude",
+    suggestion: str = "",
+    source: str = "manual",
+) -> dict:
+    """새 이슈를 등록한다. issue_key는 자동 생성."""
+    if severity not in VALID_SEVERITIES:
+        return {"ok": False, "error": f"유효하지 않은 심각도: '{severity}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        prefix = slug_to_prefix(project)
+        return db_issue_add(
+            conn, p["id"], prefix, title, description, category,
+            severity, location, chapter, assignee, reporter, suggestion, source
+        )
+
+
+@mcp.tool()
+def issue_list(
+    project: str,
+    status: str = "",
+    chapter: str = "",
+    category: str = "",
+    assignee: str = "",
+    severity: str = "",
+    search: str = "",
+    sort: str = "default",
+) -> dict:
+    """프로젝트의 이슈 목록을 필터링하여 반환한다."""
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        issues = db_issue_list(conn, p["id"], status, chapter, category, assignee, severity, search, sort)
+    return {"project": project, "count": len(issues), "issues": issues}
+
+
+@mcp.tool()
+def issue_show(issue: str) -> dict:
+    """이슈의 전체 상세 정보를 반환한다. 태그와 변경 이력 포함."""
+    with get_db() as conn:
+        data = db_issue_show(conn, issue)
+    if data is None:
+        return {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+    return data
+
+
+@mcp.tool()
+def issue_update(
+    issue: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    severity: Optional[str] = None,
+    location: Optional[str] = None,
+    chapter: Optional[str] = None,
+    assignee: Optional[str] = None,
+    suggestion: Optional[str] = None,
+    resolution: Optional[str] = None,
+    changed_by: str = "",
+) -> dict:
+    """이슈의 필드를 수정한다. 변경 이력 자동 기록. 전달된 파라미터만 수정."""
+    updates = {}
+    for field, val in [
+        ("title", title), ("description", description), ("status", status),
+        ("category", category), ("severity", severity), ("location", location),
+        ("chapter", chapter), ("assignee", assignee), ("suggestion", suggestion),
+        ("resolution", resolution),
+    ]:
+        if val is not None:
+            updates[field] = val
+
+    if not updates:
+        return {"ok": False, "error": "변경할 항목을 하나 이상 지정해 주세요"}
+    if "status" in updates and updates["status"] not in VALID_STATUSES:
+        return {"ok": False, "error": f"유효하지 않은 상태: '{updates['status']}'. 허용값: {', '.join(VALID_STATUSES)}"}
+    if "severity" in updates and updates["severity"] not in VALID_SEVERITIES:
+        return {"ok": False, "error": f"유효하지 않은 심각도: '{updates['severity']}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
+
+    with get_db() as conn:
+        row = db_issue_get(conn, issue)
+        if not row:
+            return {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+        updated_fields = db_issue_update(conn, row["id"], row, updates, changed_by)
+    return {"ok": True, "issue_key": row["issue_key"], "updated_fields": updated_fields}
+
+
+@mcp.tool()
+def issue_resolve(issue: str, resolution: str = "", resolved_by: str = "") -> dict:
+    """이슈를 resolved 상태로 변경하는 단축 tool."""
+    with get_db() as conn:
+        row = db_issue_get(conn, issue)
+        if not row:
+            return {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+        updates = {"status": "resolved"}
+        if resolution:
+            updates["resolution"] = resolution
+        db_issue_update(conn, row["id"], row, updates, changed_by=resolved_by)
+    return {"ok": True, "issue_key": row["issue_key"], "status": "resolved"}
+
+
+@mcp.tool()
+def issue_delete(issue: str, deleted_by: str = "") -> dict:
+    """이슈를 소프트 딜리트한다. 데이터는 보존되며 목록에서 숨겨진다."""
+    with get_db() as conn:
+        return db_issue_delete(conn, issue, deleted_by)
+
+# ─── 일괄 처리 ────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def issue_batch_update(issues: str, status: str, changed_by: str = "") -> dict:
+    """여러 이슈의 상태를 한 번에 변경한다. issues: 이슈 키 쉼표 구분."""
+    if status not in VALID_STATUSES:
+        return {"ok": False, "error": f"유효하지 않은 상태: '{status}'. 허용값: {', '.join(VALID_STATUSES)}"}
+    keys = [k.strip() for k in issues.split(",") if k.strip()]
+    updated = 0
+    skipped = []
+    with get_db() as conn:
+        for key in keys:
+            row = db_issue_get(conn, key)
+            if not row:
+                skipped.append(key)
+                continue
+            db_issue_update(conn, row["id"], row, {"status": status}, changed_by=changed_by)
+            updated += 1
+    return {"ok": True, "updated": updated, "skipped": skipped, "status": status}
+
+# ─── 태그 ─────────────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def issue_tag(issue: str, action: str, tags: str = "") -> dict:
+    """이슈에 태그를 추가/제거/조회한다. action: add/remove/list"""
+    if action not in ("add", "remove", "list"):
+        return {"ok": False, "error": f"유효하지 않은 action: '{action}'. 허용값: add, remove, list"}
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    if action in ("add", "remove") and not tag_list:
+        return {"ok": False, "error": f"{action}할 태그를 지정해 주세요"}
+
+    with get_db() as conn:
+        row = db_issue_get(conn, issue)
+        if not row:
+            return {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+        if action == "add":
+            db_tag_add(conn, row["id"], tag_list)
+        elif action == "remove":
+            db_tag_remove(conn, row["id"], tag_list)
+        current_tags = db_tag_list(conn, row["id"])
+    return {"issue_key": row["issue_key"], "tags": current_tags}
+
+# ─── 임포트/익스포트 ──────────────────────────────────────────────────────────
+
+@mcp.tool()
+def import_xlsx(project: str, file_path: str, skip_duplicates: bool = False) -> dict:
+    """엑셀 파일에서 이슈를 임포트한다."""
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        prefix = slug_to_prefix(project)
+        return db_import_xlsx(conn, p["id"], prefix, file_path, skip_duplicates)
+
+
+@mcp.tool()
+def export_issues(project: str, output_path: str, status: str = "") -> dict:
+    """이슈를 파일로 내보낸다. output_path: .xlsx/.csv/.json"""
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        return db_export_issues(conn, p["id"], output_path, status)
+
+# ─── 통계/이력/검색 ───────────────────────────────────────────────────────────
+
+@mcp.tool()
+def project_stats(project: str) -> dict:
+    """프로젝트의 이슈 통계를 반환한다."""
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        return db_project_stats(conn, p["id"])
+
+
+@mcp.tool()
+def issue_history(issue: str) -> dict:
+    """특정 이슈의 변경 이력을 반환한다."""
+    with get_db() as conn:
+        row = db_issue_get(conn, issue)
+        if not row:
+            return {"ok": False, "error": f"이슈 '{issue}'를 찾을 수 없습니다"}
+        history_rows = conn.execute(
+            "SELECT * FROM issue_history WHERE issue_id=? ORDER BY changed_at",
+            (row["id"],)
+        ).fetchall()
+        history = [
+            {
+                "field": h["field"],
+                "old_value": h["old_value"],
+                "new_value": h["new_value"],
+                "changed_by": h["changed_by"],
+                "changed_at": h["changed_at"],
+                "note": h["note"],
+            }
+            for h in history_rows
+        ]
+    return {"issue_key": row["issue_key"], "history": history}
+
+
+@mcp.tool()
+def search_issues(query: str, project: str = "") -> dict:
+    """전체 프로젝트 또는 특정 프로젝트에서 텍스트를 검색한다."""
+    term = f"%{query}%"
+    sql = (
+        "SELECT i.*, p.slug as project_slug FROM issues i "
+        "JOIN projects p ON i.project_id=p.id "
+        "WHERE i.deleted_at IS NULL AND p.deleted_at IS NULL "
+        "AND (i.title LIKE ? OR i.description LIKE ? OR i.suggestion LIKE ? "
+        "OR i.resolution LIKE ? OR i.location LIKE ?)"
+    )
+    params = [term] * 5
+    if project:
+        sql += " AND p.slug=?"
+        params.append(project)
+    sql += " ORDER BY i.updated_at DESC"
+
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    results = [
+        {
+            "project": r["project_slug"],
+            "issue_key": r["issue_key"],
+            "title": r["title"],
+            "status": r["status"],
+            "category": r["category"],
+            "chapter": r["chapter"],
+            "location": r["location"],
+        }
+        for r in rows
+    ]
+    return {"query": query, "count": len(results), "results": results}
+
+
+# ─── 진입점 ───────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8419)
