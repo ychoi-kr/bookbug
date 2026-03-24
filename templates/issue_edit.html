@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.issue_key }} 수정 — bookbug{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
+    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_slug }}</a></li>
+    <li class="breadcrumb-item"><a href="/issue/{{ issue.issue_key }}">{{ issue.issue_key }}</a></li>
+    <li class="breadcrumb-item active">수정</li>
+  </ol>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">이슈 수정 — {{ issue.issue_key }}</div>
+      <div class="card-body">
+        <form method="post" action="/issue/{{ issue.issue_key }}/edit">
+
+          <div class="mb-3">
+            <label class="field-label">제목 *</label>
+            <input type="text" name="title" class="form-control" value="{{ issue.title }}" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+              <label class="field-label">상태</label>
+              <select name="status" class="form-select">
+                {% for s in VALID_STATUSES %}
+                <option value="{{ s }}" {% if issue.status == s %}selected{% endif %}>{{ status_label(s).text }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-4">
+              <label class="field-label">심각도</label>
+              <select name="severity" class="form-select">
+                {% for s in VALID_SEVERITIES %}
+                <option value="{{ s }}" {% if issue.severity == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-sm-4">
+              <label class="field-label">담당자</label>
+              <input type="text" name="assignee" class="form-control" value="{{ issue.assignee or '' }}">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+              <label class="field-label">유형 (category)</label>
+              <input type="text" name="category" class="form-control" value="{{ issue.category or '' }}">
+            </div>
+            <div class="col-sm-4">
+              <label class="field-label">장 (chapter)</label>
+              <input type="text" name="chapter" class="form-control" value="{{ issue.chapter or '' }}">
+            </div>
+            <div class="col-sm-4">
+              <label class="field-label">위치/맥락</label>
+              <input type="text" name="location" class="form-control" value="{{ issue.location or '' }}">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">설명</label>
+            <textarea name="description" class="form-control" rows="4">{{ issue.description or '' }}</textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">교정 의견</label>
+            <textarea name="suggestion" class="form-control" rows="3">{{ issue.suggestion or '' }}</textarea>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">처리 결과 (resolution)</label>
+            <textarea name="resolution" class="form-control" rows="2">{{ issue.resolution or '' }}</textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="field-label">변경자</label>
+            <input type="text" name="changed_by" class="form-control" value="editor" style="max-width:200px">
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">저장</button>
+            <a href="/issue/{{ issue.issue_key }}" class="btn btn-outline-secondary">취소</a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

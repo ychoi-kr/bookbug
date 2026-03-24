@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.issue_key }} — bookbug{% endblock %}
+
+{% block content %}
+{% set sl  = status_label(issue.status) %}
+{% set svl = severity_label(issue.severity) %}
+
+{# ── 헤더 ── #}
+<nav aria-label="breadcrumb" class="mb-2">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
+    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_slug }}</a></li>
+    <li class="breadcrumb-item active">{{ issue.issue_key }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start gap-2 mb-3 flex-wrap">
+  <div class="flex-grow-1">
+    <h4 class="mb-1">{{ issue.title }}</h4>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <span class="badge bg-{{ sl.color }}">{{ sl.text }}</span>
+      <span class="badge bg-{{ svl.color }} {% if svl.color == 'light' %}text-dark{% endif %}">{{ svl.text }}</span>
+      <span class="text-muted small font-monospace">{{ issue.issue_key }}</span>
+      {% if issue.chapter %}<span class="text-muted small">{{ issue.chapter }}장</span>{% endif %}
+      {% if issue.category %}<span class="badge bg-light text-dark">{{ issue.category }}</span>{% endif %}
+    </div>
+  </div>
+  <a href="/issue/{{ issue.issue_key }}/edit" class="btn btn-outline-primary btn-sm">수정</a>
+</div>
+
+<div class="row g-3">
+  {# ── 본문 ── #}
+  <div class="col-lg-8">
+    {% if issue.description %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="field-label mb-1">설명</div>
+        <div style="white-space: pre-wrap;">{{ issue.description }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if issue.suggestion %}
+    <div class="card mb-3 border-primary">
+      <div class="card-body">
+        <div class="field-label mb-1 text-primary">교정 의견</div>
+        <div style="white-space: pre-wrap;">{{ issue.suggestion }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if issue.resolution %}
+    <div class="card mb-3 border-success">
+      <div class="card-body">
+        <div class="field-label mb-1 text-success">처리 결과</div>
+        <div style="white-space: pre-wrap;">{{ issue.resolution }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── 빠른 상태 변경 ── #}
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="field-label mb-2">상태 변경</div>
+        <form method="post" action="/issue/{{ issue.issue_key }}/status" class="d-flex gap-2 flex-wrap align-items-center">
+          <input type="hidden" name="back" value="/issue/{{ issue.issue_key }}">
+          <select name="status" class="form-select form-select-sm" style="width:auto">
+            {% for s in VALID_STATUSES %}
+            <option value="{{ s }}" {% if issue.status == s %}selected{% endif %}>{{ status_label(s).text }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="changed_by" class="form-control form-control-sm" placeholder="변경자" style="width:120px" value="editor">
+          <button type="submit" class="btn btn-sm btn-outline-primary">변경</button>
+        </form>
+      </div>
+    </div>
+
+    {# ── 변경 이력 ── #}
+    {% if history %}
+    <div class="card">
+      <div class="card-header small fw-bold">변경 이력</div>
+      <div class="card-body py-2">
+        {% for h in history %}
+        <div class="history-entry mb-2 py-1">
+          <div class="small">
+            <span class="fw-bold">{{ h.field }}</span>
+            <span class="text-muted"> : </span>
+            <span class="text-danger">{{ h.old_value or "(없음)" }}</span>
+            <span class="text-muted"> → </span>
+            <span class="text-success">{{ h.new_value or "(없음)" }}</span>
+          </div>
+          <div class="text-muted" style="font-size:.72rem">
+            {{ h.changed_by or "?" }} · {{ h.changed_at[:16] if h.changed_at else "" }}
+            {% if h.note %} · {{ h.note }}{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── 사이드바 ── #}
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        {% macro field(label, val) %}
+        {% if val %}
+        <div class="mb-2">
+          <div class="field-label">{{ label }}</div>
+          <div>{{ val }}</div>
+        </div>
+        {% endif %}
+        {% endmacro %}
+        {{ field("위치/맥락", issue.location) }}
+        {{ field("담당자", issue.assignee) }}
+        {{ field("보고자", issue.reporter) }}
+        {{ field("출처", issue.source) }}
+        <div class="mb-2">
+          <div class="field-label">등록일</div>
+          <div class="small">{{ issue.created_at[:16] if issue.created_at else "" }}</div>
+        </div>
+        <div class="mb-2">
+          <div class="field-label">최종 수정</div>
+          <div class="small">{{ issue.updated_at[:16] if issue.updated_at else "" }}</div>
+        </div>
+        {% if issue.resolved_at %}
+        <div class="mb-2">
+          <div class="field-label">완료일</div>
+          <div class="small">{{ issue.resolved_at[:16] }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if tags %}
+    <div class="card">
+      <div class="card-body">
+        <div class="field-label mb-2">태그</div>
+        <div class="d-flex flex-wrap gap-1">
+          {% for t in tags %}
+          <span class="badge bg-light text-dark border">{{ t }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

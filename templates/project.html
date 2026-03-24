@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}{{ project.title }} — bookbug{% endblock %}
+
+{% block content %}
+{# ── 헤더 ── #}
+<div class="d-flex align-items-start mb-2 gap-3 flex-wrap">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1">
+        <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
+        <li class="breadcrumb-item active">{{ project.title }}</li>
+      </ol>
+    </nav>
+    <h4 class="mb-0">{{ project.title }}</h4>
+    {% if project.description %}<p class="text-muted small mb-0">{{ project.description }}</p>{% endif %}
+  </div>
+  <div class="ms-auto d-flex gap-2 align-items-center flex-wrap">
+    {# export 버튼 자리 #}
+    <div class="dropdown">
+      <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">내보내기</button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="/project/{{ project.slug }}/export?fmt=json{% if filters.status %}&status={{ filters.status }}{% endif %}">JSON</a></li>
+        <li><a class="dropdown-item" href="/project/{{ project.slug }}/export?fmt=csv{% if filters.status %}&status={{ filters.status }}{% endif %}">CSV</a></li>
+        <li><a class="dropdown-item" href="/project/{{ project.slug }}/export?fmt=xlsx{% if filters.status %}&status={{ filters.status }}{% endif %}">Excel</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{# ── 통계 바 ── #}
+{% if stats %}
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  {% for s in [("open","secondary","open"), ("in_progress","primary","진행중"), ("resolved","success","완료"), ("wontfix","warning","보류"), ("duplicate","info","중복")] %}
+  {% set cnt = stats.by_status.get(s[0], 0) %}
+  {% if cnt %}
+  <a href="?status={{ s[0] }}" class="text-decoration-none">
+    <div class="card stat-card px-3 py-2 border-{{ s[1] }}">
+      <div class="stat-num text-{{ s[1] }}">{{ cnt }}</div>
+      <div class="stat-lbl">{{ s[2] }}</div>
+    </div>
+  </a>
+  {% endif %}
+  {% endfor %}
+  <div class="card stat-card px-3 py-2">
+    <div class="stat-num">{{ stats.total }}</div>
+    <div class="stat-lbl">전체</div>
+  </div>
+</div>
+{% endif %}
+
+{# ── 필터 바 ── #}
+<div class="card mb-3 filter-bar">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="field-label">검색</label>
+        <input type="text" name="search" class="form-control form-control-sm" placeholder="키워드" value="{{ filters.search }}">
+      </div>
+      <div class="col-auto">
+        <label class="field-label">상태</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">전체</option>
+          {% for s in VALID_STATUSES %}
+          <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ status_label(s).text }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if options.chapters %}
+      <div class="col-auto">
+        <label class="field-label">장</label>
+        <select name="chapter" class="form-select form-select-sm">
+          <option value="">전체</option>
+          {% for c in options.chapters %}
+          <option value="{{ c }}" {% if filters.chapter == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if options.categories %}
+      <div class="col-auto">
+        <label class="field-label">유형</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">전체</option>
+          {% for c in options.categories %}
+          <option value="{{ c }}" {% if filters.category == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if options.assignees %}
+      <div class="col-auto">
+        <label class="field-label">담당</label>
+        <select name="assignee" class="form-select form-select-sm">
+          <option value="">전체</option>
+          {% for a in options.assignees %}
+          <option value="{{ a }}" {% if filters.assignee == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-auto">
+        <label class="field-label">심각도</label>
+        <select name="severity" class="form-select form-select-sm">
+          <option value="">전체</option>
+          {% for s in VALID_SEVERITIES %}
+          <option value="{{ s }}" {% if filters.severity == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="field-label">정렬</label>
+        <select name="sort" class="form-select form-select-sm">
+          <option value="default" {% if filters.sort == "default" %}selected{% endif %}>기본</option>
+          <option value="severity" {% if filters.sort == "severity" %}selected{% endif %}>심각도순</option>
+          <option value="chapter" {% if filters.sort == "chapter" %}selected{% endif %}>장순</option>
+          <option value="updated" {% if filters.sort == "updated" %}selected{% endif %}>최근수정</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">적용</button>
+        <a href="/project/{{ project.slug }}" class="btn btn-outline-secondary btn-sm">초기화</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── 이슈 테이블 ── #}
+<div class="d-flex align-items-center mb-2">
+  <span class="text-muted small">{{ total }}건
+  {% if total != issues|length %} 중 {{ issues|length }}건 표시{% endif %}
+  </span>
+</div>
+
+{% if issues %}
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th style="width:110px">키</th>
+          <th>제목</th>
+          <th style="width:80px">상태</th>
+          <th style="width:80px">심각도</th>
+          <th style="width:90px">장</th>
+          <th style="width:90px">유형</th>
+          <th style="width:80px">담당</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in issues %}
+        {% set sl = status_label(i.status) %}
+        {% set svl = severity_label(i.severity) %}
+        <tr class="issue-row" onclick="location.href='/issue/{{ i.issue_key }}'">
+          <td class="text-muted small font-monospace">{{ i.issue_key }}</td>
+          <td>
+            <span>{{ i.title }}</span>
+            {% if i.location %}<div class="text-muted small">{{ i.location }}</div>{% endif %}
+          </td>
+          <td><span class="badge bg-{{ sl.color }}">{{ sl.text }}</span></td>
+          <td><span class="badge bg-{{ svl.color }} {% if svl.color == 'light' %}text-dark{% endif %}">{{ svl.text }}</span></td>
+          <td class="small">{{ i.chapter or "" }}</td>
+          <td class="small">{{ i.category or "" }}</td>
+          <td class="small">{{ i.assignee or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── 페이지네이션 ── #}
+{% if total_pages > 1 %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    <li class="page-item {% if page == 1 %}disabled{% endif %}">
+      <a class="page-link" href="?{{ request.query_params }}&page={{ page - 1 }}">‹</a>
+    </li>
+    {% for p in range(1, total_pages + 1) %}
+    <li class="page-item {% if p == page %}active{% endif %}">
+      <a class="page-link" href="?{{ request.query_params }}&page={{ p }}">{{ p }}</a>
+    </li>
+    {% endfor %}
+    <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+      <a class="page-link" href="?{{ request.query_params }}&page={{ page + 1 }}">›</a>
+    </li>
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-5">
+  <div class="fs-1">🔍</div>
+  <p>조건에 맞는 이슈가 없습니다.</p>
+</div>
+{% endif %}
+{% endblock %}
