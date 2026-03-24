@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS issues (
     title       TEXT NOT NULL,
     description TEXT DEFAULT '',
     status      TEXT NOT NULL DEFAULT 'open'
-                CHECK(status IN ('open','in_progress','resolved','wontfix','deferred')),
+                CHECK(status IN ('open','in_progress','resolved','wontfix','deferred','duplicate')),
     category    TEXT DEFAULT '',
     severity    TEXT NOT NULL DEFAULT 'normal'
                 CHECK(severity IN ('critical','major','normal','minor','trivial')),
@@ -107,6 +107,49 @@ def get_db():
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT NULL")
             conn.commit()
+
+    # issues CHECK 제약에 duplicate 추가 마이그레이션
+    # SQLite는 CHECK 변경을 ALTER TABLE로 못 하므로 테이블 재생성
+    check_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='issues'"
+    ).fetchone()
+    if check_sql and "'duplicate'" not in check_sql[0]:
+        conn.executescript("""
+            PRAGMA foreign_keys=OFF;
+            ALTER TABLE issues RENAME TO issues_old;
+            CREATE TABLE issues (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id  INTEGER NOT NULL REFERENCES projects(id),
+                issue_key   TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                status      TEXT NOT NULL DEFAULT 'open'
+                            CHECK(status IN ('open','in_progress','resolved','wontfix','deferred','duplicate')),
+                category    TEXT DEFAULT '',
+                severity    TEXT NOT NULL DEFAULT 'normal'
+                            CHECK(severity IN ('critical','major','normal','minor','trivial')),
+                location    TEXT DEFAULT '',
+                chapter     TEXT DEFAULT '',
+                assignee    TEXT DEFAULT '',
+                reporter    TEXT NOT NULL DEFAULT 'claude',
+                suggestion  TEXT DEFAULT '',
+                resolution  TEXT DEFAULT '',
+                source      TEXT DEFAULT '',
+                created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                resolved_at TEXT,
+                deleted_at  TEXT DEFAULT NULL,
+                UNIQUE(project_id, issue_key)
+            );
+            INSERT INTO issues SELECT * FROM issues_old;
+            DROP TABLE issues_old;
+            CREATE INDEX IF NOT EXISTS idx_issues_project  ON issues(project_id);
+            CREATE INDEX IF NOT EXISTS idx_issues_status   ON issues(status);
+            CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(chapter);
+            CREATE INDEX IF NOT EXISTS idx_issues_category ON issues(category);
+            PRAGMA foreign_keys=ON;
+        """)
+        conn.commit()
 
     try:
         yield conn
