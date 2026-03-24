@@ -180,6 +180,41 @@ class TestIssueTools(unittest.TestCase):
         self.assertFalse(r["ok"])
 
 
+class TestIssueProjectScoping(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+        mcp.project_create("proj-a", "프로젝트 A")
+        mcp.project_create("proj-b", "프로젝트 B")
+        mcp.issue_add("proj-a", "A 이슈 1")
+        mcp.issue_add("proj-b", "B 이슈 1")
+
+    def test_issue_show_ambiguous_without_project(self):
+        r = mcp.issue_show("1")
+        self.assertFalse(r["ok"])
+        self.assertIn("여러 프로젝트", r["error"])
+
+    def test_issue_show_with_project(self):
+        r = mcp.issue_show("1", project="proj-b")
+        self.assertEqual(r["title"], "B 이슈 1")
+
+    def test_issue_update_with_project(self):
+        r = mcp.issue_update("1", project="proj-b", status="in_progress")
+        self.assertTrue(r["ok"])
+        self.assertEqual(mcp.issue_show("1", project="proj-b")["status"], "in_progress")
+        self.assertEqual(mcp.issue_show("1", project="proj-a")["status"], "open")
+
+    def test_issue_resolve_with_project(self):
+        r = mcp.issue_resolve("1", project="proj-a", resolution="A만 해결")
+        self.assertTrue(r["ok"])
+        self.assertEqual(mcp.issue_show("1", project="proj-a")["status"], "resolved")
+        self.assertEqual(mcp.issue_show("1", project="proj-b")["status"], "open")
+
+    def test_slug_key_format_still_supported(self):
+        r = mcp.issue_show("proj-a#1")
+        self.assertEqual(r["title"], "A 이슈 1")
+
+
 class TestBatchUpdate(unittest.TestCase):
 
     def setUp(self):
