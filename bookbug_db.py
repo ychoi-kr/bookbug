@@ -107,6 +107,21 @@ def get_db():
         if col not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT NULL")
             conn.commit()
+    # issue_key 마이그레이션: PREFIX-N → N (정수 문자열)
+    old_keys = conn.execute(
+        "SELECT id, issue_key FROM issues WHERE issue_key LIKE '%-%'"
+    ).fetchall()
+    if old_keys:
+        for row in old_keys:
+            raw = row[1]
+            dash = raw.rfind("-")
+            num_part = raw[dash+1:] if dash >= 0 else raw
+            try:
+                int(num_part)
+                conn.execute("UPDATE issues SET issue_key=? WHERE id=?", (num_part, row[0]))
+            except ValueError:
+                pass
+        conn.commit()
     try:
         yield conn
     finally:
@@ -114,17 +129,14 @@ def get_db():
 
 # ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
 
-def slug_to_prefix(slug: str) -> str:
-    """slug에서 issue_key 접두어 생성. 예: 'claude-xl-ppt' → 'CLAU'"""
-    return slug.upper().replace("-", "")[:4]
-
-def next_issue_key(conn: sqlite3.Connection, project_id: int, prefix: str) -> str:
+def next_issue_key(conn: sqlite3.Connection, project_id: int) -> str:
+    """프로젝트 내 다음 issue_key(정수 문자열) 반환. 예: '1', '2', '3'"""
     row = conn.execute(
-        "SELECT MAX(CAST(SUBSTR(issue_key, LENGTH(?)+2) AS INTEGER)) FROM issues WHERE project_id=?",
-        (prefix, project_id)
+        "SELECT MAX(CAST(issue_key AS INTEGER)) FROM issues WHERE project_id=?",
+        (project_id,)
     ).fetchone()
     num = (row[0] or 0) + 1
-    return f"{prefix}-{num}"
+    return str(num)
 
 def record_change(conn: sqlite3.Connection, issue_id: int, field: str,
                   old_val, new_val, changed_by: str = "", note: str = ""):
@@ -201,12 +213,12 @@ def db_project_show(conn: sqlite3.Connection, slug: str):
 
 # ─── 이슈 CRUD ────────────────────────────────────────────────────────────────
 
-def db_issue_add(conn: sqlite3.Connection, project_id: int, prefix: str,
+def db_issue_add(conn: sqlite3.Connection, project_id: int,
                  title: str, description: str = "", category: str = "",
                  severity: str = "normal", location: str = "", chapter: str = "",
                  assignee: str = "", reporter: str = "claude",
                  suggestion: str = "", source: str = "manual") -> dict:
-    key = next_issue_key(conn, project_id, prefix)
+    key = next_issue_key(conn, project_id)
     try:
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
@@ -221,8 +233,21 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int, prefix: str,
         return {"ok": False, "error": str(e)}
 
 def db_issue_get(conn: sqlite3.Connection, key_or_id: str):
+    """issue_key(정수 문자열) 또는 내부 id로 이슈 조회.
+    크로스 프로젝트 형식 '{slug}#{N}'도 지원."""
+    # slug#N 형식 처리
+    if "#" in str(key_or_id):
+        parts = str(key_or_id).split("#", 1)
+        slug, num = parts[0], parts[1]
+        row = conn.execute(
+            "SELECT i.* FROM issues i JOIN projects p ON i.project_id=p.id "
+            "WHERE p.slug=? AND i.issue_key=? AND i.deleted_at IS NULL",
+            (slug, num)
+        ).fetchone()
+        return row
+    # 순수 정수 문자열 → issue_key로 먼저 조회
     row = conn.execute(
-        "SELECT * FROM issues WHERE issue_key=? COLLATE NOCASE AND deleted_at IS NULL", (key_or_id,)
+        "SELECT * FROM issues WHERE issue_key=? AND deleted_at IS NULL", (str(key_or_id),)
     ).fetchone()
     if not row:
         try:
@@ -262,7 +287,7 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         term = f"%{search}%"
         params.extend([term, term, term])
 
-    order = "chapter, CAST(SUBSTR(issue_key, INSTR(issue_key,'-')+1) AS INTEGER)"
+    order = "chapter, CAST(issue_key AS INTEGER)"
     if sort == "severity":
         order = ("CASE severity WHEN 'critical' THEN 1 WHEN 'major' THEN 2 "
                  "WHEN 'normal' THEN 3 WHEN 'minor' THEN 4 ELSE 5 END, " + order)
@@ -457,7 +482,7 @@ def build_col_map(columns: list) -> dict:
                 break
     return col_map
 
-def db_import_xlsx(conn: sqlite3.Connection, project_id: int, prefix: str,
+def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
                    file_path: str, skip_duplicates: bool = False) -> dict:
     try:
         import pandas as pd
@@ -507,7 +532,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int, prefix: str,
                 skipped += 1
                 continue
 
-        key = next_issue_key(conn, project_id, prefix)
+        key = next_issue_key(conn, project_id)
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
                severity, location, chapter, assignee, reporter, suggestion, source)
@@ -537,7 +562,7 @@ def db_export_issues(conn: sqlite3.Connection, project_id: int,
         placeholders = ",".join(["?"] * len(statuses))
         query += f" AND status IN ({placeholders})"
         params.extend(statuses)
-    query += " ORDER BY CAST(SUBSTR(issue_key, INSTR(issue_key,'-')+1) AS INTEGER)"
+    query += " ORDER BY CAST(issue_key AS INTEGER)"
 
     rows = conn.execute(query, params).fetchall()
     if not rows:

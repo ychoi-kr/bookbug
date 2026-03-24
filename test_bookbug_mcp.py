@@ -73,11 +73,11 @@ class TestIssueTools(unittest.TestCase):
     def test_issue_add_basic(self):
         r = mcp.issue_add("test-book", "첫 번째 이슈")
         self.assertTrue(r["ok"])
-        self.assertEqual(r["issue_key"], "TEST-1")
+        self.assertEqual(r["issue_key"], "1")
 
     def test_issue_add_key_sequence(self):
         keys = [mcp.issue_add("test-book", f"이슈 {i}")["issue_key"] for i in range(3)]
-        self.assertEqual(keys, ["TEST-1", "TEST-2", "TEST-3"])
+        self.assertEqual(keys, ["1", "2", "3"])
 
     def test_issue_add_project_not_found(self):
         r = mcp.issue_add("no-project", "이슈")
@@ -129,12 +129,12 @@ class TestIssueTools(unittest.TestCase):
     def test_issue_show_ok(self):
         r = mcp.issue_add("test-book", "쇼 테스트")
         detail = mcp.issue_show(r["issue_key"])
-        self.assertEqual(detail["issue_key"], "TEST-1")
+        self.assertEqual(detail["issue_key"], "1")
         self.assertIn("tags", detail)
         self.assertIn("history", detail)
 
     def test_issue_show_not_found(self):
-        r = mcp.issue_show("TEST-9999")
+        r = mcp.issue_show("9999")
         self.assertFalse(r["ok"])
 
     def test_issue_update_status(self):
@@ -162,7 +162,7 @@ class TestIssueTools(unittest.TestCase):
         self.assertFalse(r["ok"])
 
     def test_issue_update_not_found(self):
-        r = mcp.issue_update("TEST-9999", status="resolved")
+        r = mcp.issue_update("9999", status="resolved")
         self.assertFalse(r["ok"])
 
     def test_issue_resolve(self):
@@ -176,7 +176,7 @@ class TestIssueTools(unittest.TestCase):
         self.assertIsNotNone(detail["resolved_at"])
 
     def test_issue_resolve_not_found(self):
-        r = mcp.issue_resolve("TEST-9999")
+        r = mcp.issue_resolve("9999")
         self.assertFalse(r["ok"])
 
 
@@ -196,10 +196,10 @@ class TestBatchUpdate(unittest.TestCase):
         self.assertEqual(r["skipped"], [])
 
     def test_batch_update_partial_missing(self):
-        r = mcp.issue_batch_update(f"{self.k1},BATC-9999,{self.k2}", "in_progress")
+        r = mcp.issue_batch_update(f"{self.k1},9999,{self.k2}", "in_progress")
         self.assertTrue(r["ok"])
         self.assertEqual(r["updated"], 2)
-        self.assertIn("BATC-9999", r["skipped"])
+        self.assertIn("9999", r["skipped"])
 
     def test_batch_update_invalid_status(self):
         r = mcp.issue_batch_update(self.k1, "bad_status")
@@ -236,7 +236,7 @@ class TestTagTools(unittest.TestCase):
         self.assertEqual(r["tags"].count("dup"), 1)
 
     def test_tag_issue_not_found(self):
-        r = mcp.issue_tag("TAG-9999", "list")
+        r = mcp.issue_tag("9999", "list")
         self.assertFalse(r["ok"])
 
     def test_tag_invalid_action(self):
@@ -273,7 +273,7 @@ class TestStatsAndHistory(unittest.TestCase):
         self.assertGreaterEqual(len(r["history"]), 2)
 
     def test_issue_history_not_found(self):
-        r = mcp.issue_history("STAT-9999")
+        r = mcp.issue_history("9999")
         self.assertFalse(r["ok"])
 
 
@@ -429,31 +429,25 @@ class TestIssueKeyGeneration(unittest.TestCase):
     def setUp(self):
         fresh_db()
 
-    def test_key_prefix_from_slug(self):
+    def test_key_is_integer_string(self):
         mcp.project_create("claude-xl-ppt", "Claude XL PPT")
         r = mcp.issue_add("claude-xl-ppt", "이슈")
-        self.assertEqual(r["issue_key"], "CLAU-1")
-
-    def test_key_prefix_short_slug(self):
-        mcp.project_create("abc", "ABC")
-        r = mcp.issue_add("abc", "이슈")
-        self.assertEqual(r["issue_key"], "ABC-1")
+        self.assertEqual(r["issue_key"], "1")
 
     def test_key_sequential(self):
         mcp.project_create("seq-test", "순번 테스트")
         keys = [mcp.issue_add("seq-test", f"이슈 {i}")["issue_key"] for i in range(5)]
-        self.assertEqual(keys, ["SEQT-1", "SEQT-2", "SEQT-3", "SEQT-4", "SEQT-5"])
+        self.assertEqual(keys, ["1", "2", "3", "4", "5"])
 
     def test_keys_independent_per_project(self):
         mcp.project_create("proj-a", "A")
         mcp.project_create("proj-b", "B")
-        # 두 프로젝트의 prefix가 동일해도 번호는 독립적
         a1 = mcp.issue_add("proj-a", "A 이슈")["issue_key"]
         b1 = mcp.issue_add("proj-b", "B 이슈")["issue_key"]
         a2 = mcp.issue_add("proj-a", "A 이슈 2")["issue_key"]
-        self.assertEqual(a1, "PROJ-1")
-        self.assertEqual(b1, "PROJ-1")
-        self.assertEqual(a2, "PROJ-2")
+        self.assertEqual(a1, "1")
+        self.assertEqual(b1, "1")
+        self.assertEqual(a2, "2")
 
 
 if __name__ == "__main__":

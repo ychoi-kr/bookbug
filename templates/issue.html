@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ issue.issue_key }} — bookbug{% endblock %}
+{% block title %}#{{ issue.issue_key }} — bookbug{% endblock %}
 
 {% block content %}
 {% set sl  = status_label(issue.status) %}
@@ -10,7 +10,7 @@
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
     <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_slug }}</a></li>
-    <li class="breadcrumb-item active">{{ issue.issue_key }}</li>
+    <li class="breadcrumb-item active">#{{ issue.issue_key }}</li>
   </ol>
 </nav>
 
@@ -20,12 +20,12 @@
     <div class="d-flex gap-2 flex-wrap align-items-center">
       <span class="badge bg-{{ sl.color }}">{{ sl.text }}</span>
       <span class="badge bg-{{ svl.color }} {% if svl.color == 'light' %}text-dark{% endif %}">{{ svl.text }}</span>
-      <span class="text-muted small font-monospace">{{ issue.issue_key }}</span>
+      <span class="text-muted small font-monospace">#{{ issue.issue_key }}</span>
       {% if issue.chapter %}<span class="text-muted small">{{ issue.chapter }}장</span>{% endif %}
       {% if issue.category %}<span class="badge bg-light text-dark">{{ issue.category }}</span>{% endif %}
     </div>
   </div>
-  <a href="/issue/{{ issue.issue_key }}/edit" class="btn btn-outline-primary btn-sm">수정</a>
+  <a href="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/edit" class="btn btn-outline-primary btn-sm">수정</a>
 </div>
 
 <div class="row g-3">
@@ -62,8 +62,8 @@
     <div class="card mb-3">
       <div class="card-body py-2">
         <div class="field-label mb-2">상태 변경</div>
-        <form method="post" action="/issue/{{ issue.issue_key }}/status" class="d-flex gap-2 flex-wrap align-items-center">
-          <input type="hidden" name="back" value="/issue/{{ issue.issue_key }}">
+        <form method="post" action="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/status" class="d-flex gap-2 flex-wrap align-items-center">
+          <input type="hidden" name="back" value="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}">
           <select name="status" class="form-select form-select-sm" style="width:auto">
             {% for s in VALID_STATUSES %}
             <option value="{{ s }}" {% if issue.status == s %}selected{% endif %}>{{ status_label(s).text }}</option>

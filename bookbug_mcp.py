@@ -9,7 +9,6 @@ from typing import Optional
 from fastmcp import FastMCP
 from bookbug_db import (
     get_db,
-    slug_to_prefix,
     db_project_create,
     db_project_list,
     db_project_show,
@@ -91,9 +90,8 @@ def issue_add(
         p = db_project_get(conn, project)
         if not p:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
-        prefix = slug_to_prefix(project)
         return db_issue_add(
-            conn, p["id"], prefix, title, description, category,
+            conn, p["id"], title, description, category,
             severity, location, chapter, assignee, reporter, suggestion, source
         )
 
@@ -240,8 +238,7 @@ def import_xlsx(project: str, file_path: str, skip_duplicates: bool = False) -> 
         p = db_project_get(conn, project)
         if not p:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
-        prefix = slug_to_prefix(project)
-        return db_import_xlsx(conn, p["id"], prefix, file_path, skip_duplicates)
+        return db_import_xlsx(conn, p["id"], file_path, skip_duplicates)
 
 
 @mcp.tool()

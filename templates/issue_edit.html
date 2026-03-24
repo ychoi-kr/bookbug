@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}{{ issue.issue_key }} 수정 — bookbug{% endblock %}
+{% block title %}#{{ issue.issue_key }} 수정 — bookbug{% endblock %}
 
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
     <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_slug }}</a></li>
-    <li class="breadcrumb-item"><a href="/issue/{{ issue.issue_key }}">{{ issue.issue_key }}</a></li>
+    <li class="breadcrumb-item"><a href="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}">#{{ issue.issue_key }}</a></li>
     <li class="breadcrumb-item active">수정</li>
   </ol>
 </nav>
@@ -14,9 +14,9 @@
 <div class="row justify-content-center">
   <div class="col-lg-8">
     <div class="card shadow-sm">
-      <div class="card-header fw-bold">이슈 수정 — {{ issue.issue_key }}</div>
+      <div class="card-header fw-bold">이슈 수정 — #{{ issue.issue_key }}</div>
       <div class="card-body">
-        <form method="post" action="/issue/{{ issue.issue_key }}/edit">
+        <form method="post" action="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/edit">
 
           <div class="mb-3">
             <label class="field-label">제목 *</label>
@@ -83,7 +83,7 @@
 
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary">저장</button>
-            <a href="/issue/{{ issue.issue_key }}" class="btn btn-outline-secondary">취소</a>
+            <a href="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}" class="btn btn-outline-secondary">취소</a>
           </div>
 
         </form>

@@ -17,7 +17,6 @@ import uvicorn
 
 from bookbug_db import (
     get_db,
-    slug_to_prefix,
     db_project_create,
     db_project_list,
     db_project_show,
@@ -129,18 +128,14 @@ def project_view(
 
 # ─── 이슈 상세 ─────────────────────────────────────────────────────────────────
 
-@app.get("/issue/{key}", response_class=HTMLResponse)
-def issue_view(request: Request, key: str):
+@app.get("/issue/{slug}/{num}", response_class=HTMLResponse)
+def issue_view(request: Request, slug: str, num: str):
+    ref = f"{slug}#{num}"
     with get_db() as conn:
-        data = db_issue_show(conn, key)
+        data = db_issue_show(conn, ref)
         if not data:
             return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
-        # project_slug 조인
-        row = conn.execute(
-            "SELECT p.slug FROM projects p JOIN issues i ON i.project_id=p.id WHERE i.issue_key=? COLLATE NOCASE",
-            (key,)
-        ).fetchone()
-        data["project_slug"] = row["slug"] if row else ""
+        data["project_slug"] = slug
     tags    = data.pop("tags", [])
     history = data.pop("history", [])
     return templates.TemplateResponse(request, "issue.html", {
@@ -152,27 +147,25 @@ def issue_view(request: Request, key: str):
 
 # ─── 이슈 수정 폼 ──────────────────────────────────────────────────────────────
 
-@app.get("/issue/{key}/edit", response_class=HTMLResponse)
-def issue_edit_form(request: Request, key: str):
+@app.get("/issue/{slug}/{num}/edit", response_class=HTMLResponse)
+def issue_edit_form(request: Request, slug: str, num: str):
+    ref = f"{slug}#{num}"
     with get_db() as conn:
-        row = db_issue_get(conn, key)
+        row = db_issue_get(conn, ref)
         if not row:
             return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
-        p = conn.execute(
-            "SELECT p.slug FROM projects p JOIN issues i ON i.project_id=p.id WHERE i.issue_key=? COLLATE NOCASE",
-            (key,)
-        ).fetchone()
         issue = dict(row)
-        issue["project_slug"] = p["slug"] if p else ""
+        issue["project_slug"] = slug
     return templates.TemplateResponse(request, "issue_edit.html", {
         "issue": issue,
     })
 
 
-@app.post("/issue/{key}/edit")
+@app.post("/issue/{slug}/{num}/edit")
 async def issue_edit_submit(
     request: Request,
-    key: str,
+    slug: str,
+    num: str,
     title:       str = Form(""),
     description: str = Form(""),
     status:      str = Form(""),
@@ -185,6 +178,7 @@ async def issue_edit_submit(
     resolution:  str = Form(""),
     changed_by:  str = Form("editor"),
 ):
+    ref = f"{slug}#{num}"
     updates = {}
     fields = {
         "title": title, "description": description, "status": status,
@@ -193,7 +187,7 @@ async def issue_edit_submit(
         "resolution": resolution,
     }
     with get_db() as conn:
-        row = db_issue_get(conn, key)
+        row = db_issue_get(conn, ref)
         if not row:
             return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
         for field, val in fields.items():
@@ -201,23 +195,25 @@ async def issue_edit_submit(
                 updates[field] = val
         if updates:
             db_issue_update(conn, row["id"], row, updates, changed_by=changed_by)
-    return RedirectResponse(f"/issue/{key}", status_code=303)
+    return RedirectResponse(f"/issue/{slug}/{num}", status_code=303)
 
 
 # ─── 빠른 상태 변경 (이슈 목록에서 인라인) ────────────────────────────────────
 
-@app.post("/issue/{key}/status")
+@app.post("/issue/{slug}/{num}/status")
 async def issue_status_update(
-    key: str,
+    slug: str,
+    num: str,
     status:     str = Form(...),
     changed_by: str = Form("editor"),
     back:       str = Form(""),
 ):
+    ref = f"{slug}#{num}"
     with get_db() as conn:
-        row = db_issue_get(conn, key)
+        row = db_issue_get(conn, ref)
         if row:
             db_issue_update(conn, row["id"], row, {"status": status}, changed_by=changed_by)
-    dest = back if back else f"/issue/{key}"
+    dest = back if back else f"/issue/{slug}/{num}"
     return RedirectResponse(dest, status_code=303)
 
 

@@ -150,8 +150,8 @@
         {% for i in issues %}
         {% set sl = status_label(i.status) %}
         {% set svl = severity_label(i.severity) %}
-        <tr class="issue-row" onclick="location.href='/issue/{{ i.issue_key }}'">
-          <td class="text-muted small font-monospace">{{ i.issue_key }}</td>
+        <tr class="issue-row" onclick="location.href='/issue/{{ project.slug }}/{{ i.issue_key }}'">
+          <td class="text-muted small font-monospace">#{{ i.issue_key }}</td>
           <td>
             <span>{{ i.title }}</span>
             {% if i.location %}<div class="text-muted small">{{ i.location }}</div>{% endif %}
