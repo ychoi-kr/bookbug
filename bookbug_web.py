@@ -130,7 +130,9 @@ def project_view(
 # ─── 이슈 상세 ─────────────────────────────────────────────────────────────────
 
 @app.get("/issue/{slug}/{num}", response_class=HTMLResponse)
-def issue_view(request: Request, slug: str, num: str):
+def issue_view(request: Request, slug: str, num: str, back: str = ""):
+    from urllib.parse import unquote
+    back_url = unquote(back) if back else ""
     ref = f"{slug}#{num}"
     with get_db() as conn:
         data = db_issue_show(conn, ref)
@@ -165,6 +167,7 @@ def issue_view(request: Request, slug: str, num: str):
         "history": history,
         "grouped_history": grouped_history,
         "SHORT_FIELDS": SHORT_FIELDS,
+        "back_url": back_url,
     })
 
 

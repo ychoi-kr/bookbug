@@ -9,7 +9,7 @@
 <nav aria-label="breadcrumb" class="mb-2">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
-    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_title }}</a></li>
+    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}{{ back_url }}">{{ issue.project_title }}</a></li>
     <li class="breadcrumb-item active">#{{ issue.issue_key }}</li>
   </ol>
 </nav>

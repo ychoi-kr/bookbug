@@ -33,7 +33,7 @@
   {% for s in [("open","secondary","열림"), ("in_progress","primary","진행"), ("resolved","success","해결"), ("wontfix","warning","유지"), ("deferred","secondary","보류"), ("duplicate","info","중복")] %}
   {% set cnt = stats.by_status.get(s[0], 0) %}
   {% if cnt %}
-  <a href="?status={{ s[0] }}" class="text-decoration-none">
+  <a href="?status={{ s[0] }}{% for k, v in request.query_params.items() %}{% if k != 'status' %}&{{ k }}={{ v }}{% endif %}{% endfor %}" class="text-decoration-none">
     <div class="card stat-card px-3 py-2 border-{{ s[1] }}">
       <div class="stat-num text-{{ s[1] }}">{{ cnt }}</div>
       <div class="stat-lbl">{{ s[2] }}</div>
@@ -41,7 +41,7 @@
   </a>
   {% endif %}
   {% endfor %}
-  <a href="/project/{{ project.slug }}" class="text-decoration-none">
+  <a href="/project/{{ project.slug }}{% if filters.sort and filters.sort != 'default' %}?sort={{ filters.sort }}{% endif %}" class="text-decoration-none">
     <div class="card stat-card px-3 py-2">
       <div class="stat-num">{{ stats.total }}</div>
       <div class="stat-lbl">전체</div>
@@ -156,7 +156,7 @@
         {% for i in issues %}
         {% set sl = status_label(i.status) %}
         {% set svl = severity_label(i.severity) %}
-        <tr class="issue-row" onclick="location.href='/issue/{{ project.slug }}/{{ i.issue_key }}'">
+        <tr class="issue-row" onclick="location.href='/issue/{{ project.slug }}/{{ i.issue_key }}' + (window.location.search ? '?back=' + encodeURIComponent(window.location.search) : '')">
           <td class="text-muted small font-monospace">#{{ i.issue_key }}</td>
           <td>
             <span>{{ i.title }}</span>
