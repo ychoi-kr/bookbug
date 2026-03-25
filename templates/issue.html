@@ -19,7 +19,7 @@
     <h4 class="mb-1">{{ issue.title }}</h4>
     <div class="d-flex gap-2 flex-wrap align-items-center">
       <span class="badge bg-{{ sl.color }}">{{ sl.text }}</span>
-      <span class="badge bg-{{ svl.color }} {% if svl.color == 'light' %}text-dark{% endif %}">{{ svl.text }}</span>
+      <span class="badge bg-{{ svl.color }}">{{ svl.text }}</span>
       <span class="text-muted small font-monospace">#{{ issue.issue_key }}</span>
       {% if issue.chapter %}<span class="text-muted small">{{ issue.chapter }}장</span>{% endif %}
       {% if issue.category %}<span class="badge bg-light text-dark">{{ issue.category }}</span>{% endif %}

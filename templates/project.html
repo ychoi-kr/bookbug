@@ -30,7 +30,7 @@
 {# ── 통계 바 ── #}
 {% if stats %}
 <div class="d-flex gap-2 mb-3 flex-wrap">
-  {% for s in [("open","secondary","열림"), ("in_progress","primary","진행"), ("resolved","success","해결"), ("wontfix","warning","유지"), ("deferred","light","보류"), ("duplicate","info","중복")] %}
+  {% for s in [("open","secondary","열림"), ("in_progress","primary","진행"), ("resolved","success","해결"), ("wontfix","warning","유지"), ("deferred","secondary","보류"), ("duplicate","info","중복")] %}
   {% set cnt = stats.by_status.get(s[0], 0) %}
   {% if cnt %}
   <a href="?status={{ s[0] }}" class="text-decoration-none">
@@ -163,7 +163,7 @@
             {% if i.location %}<div class="text-muted small">{{ i.location }}</div>{% endif %}
           </td>
           <td><span class="badge bg-{{ sl.color }}">{{ sl.text }}</span></td>
-          <td><span class="badge bg-{{ svl.color }} {% if svl.color == 'light' %}text-dark{% endif %}">{{ svl.text }}</span></td>
+          <td><span class="badge bg-{{ svl.color }}">{{ svl.text }}</span></td>
           <td class="small">{{ i.chapter or "" }}</td>
           <td class="small">{{ i.category or "" }}</td>
           <td class="small">{{ i.assignee or "" }}</td>

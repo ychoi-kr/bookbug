@@ -45,7 +45,7 @@ STATUS_LABEL = {
     "in_progress": ("진행",   "primary"),
     "resolved":    ("해결",   "success"),
     "wontfix":     ("유지",   "warning"),
-    "deferred":    ("보류",   "light"),
+    "deferred":    ("보류",   "secondary"),
     "duplicate":   ("중복",   "info"),
 }
 
