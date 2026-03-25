@@ -14,8 +14,21 @@
     .badge-status, .badge-severity { font-size: .75rem; }
     .filter-bar { background: #fff; border-bottom: 1px solid #dee2e6; }
     [data-bs-theme="dark"] .filter-bar { background: #2b3035; border-bottom-color: #495057; }
-    .history-entry { border-left: 3px solid #dee2e6; padding-left: .75rem; }
     .field-label { font-size: .75rem; color: #6c757d; text-transform: uppercase; letter-spacing: .05em; }
+    /* 타임라인 */
+    .timeline { position: relative; }
+    .tl-item  { display: flex; gap: .75rem; }
+    .tl-gutter { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 16px; padding-top: .2rem; }
+    .tl-dot  { width: 10px; height: 10px; border-radius: 50%; background: #adb5bd; border: 2px solid #fff; box-shadow: 0 0 0 1px #adb5bd; flex-shrink: 0; }
+    .tl-line { flex: 1; width: 2px; background: #dee2e6; margin-top: 4px; }
+    .tl-body { flex: 1; }
+    .tl-block { white-space: pre-wrap; word-break: break-word; padding: .4rem .6rem; border-radius: .25rem; }
+    .tl-block-old { background: #fff5f5; border-left: 3px solid #f5c2c7; color: #842029; }
+    .tl-block-new { background: #f0fff4; border-left: 3px solid #a3cfbb; color: #0a3622; }
+    [data-bs-theme="dark"] .tl-dot  { border-color: #212529; }
+    [data-bs-theme="dark"] .tl-line { background: #495057; }
+    [data-bs-theme="dark"] .tl-block-old { background: #2c1215; border-left-color: #842029; color: #f5c2c7; }
+    [data-bs-theme="dark"] .tl-block-new { background: #051b11; border-left-color: #0a3622; color: #a3cfbb; }
     textarea { font-family: inherit; }
     .stat-card { min-width: 80px; text-align: center; }
     .stat-num  { font-size: 1.4rem; font-weight: 700; line-height: 1; }

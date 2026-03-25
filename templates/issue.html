@@ -9,7 +9,7 @@
 <nav aria-label="breadcrumb" class="mb-2">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
-    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_slug }}</a></li>
+    <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}">{{ issue.project_title }}</a></li>
     <li class="breadcrumb-item active">#{{ issue.issue_key }}</li>
   </ol>
 </nav>
@@ -75,26 +75,59 @@
       </div>
     </div>
 
-    {# ── 변경 이력 ── #}
-    {% if history %}
+    {# ── 변경 이력 (타임라인) ── #}
+    {% if grouped_history %}
     <div class="card">
       <div class="card-header small fw-bold">변경 이력</div>
-      <div class="card-body py-2">
-        {% for h in history %}
-        <div class="history-entry mb-2 py-1">
-          <div class="small">
-            <span class="fw-bold">{{ h.field }}</span>
-            <span class="text-muted"> : </span>
-            <span class="text-danger">{{ h.old_value or "(없음)" }}</span>
-            <span class="text-muted"> → </span>
-            <span class="text-success">{{ h.new_value or "(없음)" }}</span>
+      <div class="card-body py-2 px-3">
+        <div class="timeline">
+        {% for grp in grouped_history %}
+          <div class="tl-item">
+            {# 타임라인 점 + 세로선 #}
+            <div class="tl-gutter">
+              <div class="tl-dot"></div>
+              {% if not loop.last %}<div class="tl-line"></div>{% endif %}
+            </div>
+            <div class="tl-body pb-3">
+              {# 메타 — 작성자 · 시각 #}
+              <div class="tl-meta text-muted mb-1" style="font-size:.75rem">
+                <span class="fw-semibold text-body">{{ grp.changed_by or "?" }}</span>
+                &nbsp;·&nbsp;{{ grp.changed_at[:16] if grp.changed_at else "" }}
+              </div>
+
+              {# 짧은 필드: 배지형 한 줄 #}
+              {% for e in grp.short %}
+              <div class="small mb-1">
+                <span class="text-muted">{{ e.field }}</span>
+                <span class="badge bg-danger-subtle text-danger-emphasis ms-1">{{ e.old_value or "(없음)" }}</span>
+                <span class="text-muted mx-1">→</span>
+                <span class="badge bg-success-subtle text-success-emphasis">{{ e.new_value or "(없음)" }}</span>
+                {% if e.note %}<span class="text-muted ms-1">· {{ e.note }}</span>{% endif %}
+              </div>
+              {% endfor %}
+
+              {# 긴 필드: 제목 + 블록 #}
+              {% for e in grp.long %}
+              <div class="mb-2">
+                <div class="small text-muted mb-1">{{ e.field }}</div>
+                {% if e.old_value and e.old_value != "None" %}
+                <div class="tl-block tl-block-old small mb-1">{{ e.old_value }}</div>
+                {% else %}
+                <div class="small text-muted fst-italic mb-1">(없음)</div>
+                {% endif %}
+                <div class="tl-arrow text-muted small mb-1">↓</div>
+                {% if e.new_value and e.new_value != "None" %}
+                <div class="tl-block tl-block-new small">{{ e.new_value }}</div>
+                {% else %}
+                <div class="small text-muted fst-italic">(없음)</div>
+                {% endif %}
+                {% if e.note %}<div class="small text-muted mt-1">· {{ e.note }}</div>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
           </div>
-          <div class="text-muted" style="font-size:.72rem">
-            {{ h.changed_by or "?" }} · {{ h.changed_at[:16] if h.changed_at else "" }}
-            {% if h.note %} · {{ h.note }}{% endif %}
-          </div>
-        </div>
         {% endfor %}
+        </div>
       </div>
     </div>
     {% endif %}

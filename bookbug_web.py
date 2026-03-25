@@ -137,12 +137,34 @@ def issue_view(request: Request, slug: str, num: str):
         if not data:
             return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
         data["project_slug"] = slug
+        p = db_project_get(conn, slug)
+        data["project_title"] = p["title"] if p else slug
     tags    = data.pop("tags", [])
     history = data.pop("history", [])
+
+    # 같은 changed_at + changed_by 묶기 (GitHub 스타일 이벤트 그룹)
+    from itertools import groupby
+    SHORT_FIELDS = {"status", "severity", "assignee", "category", "chapter", "reporter", "source"}
+    grouped_history = []
+    for (changed_at, changed_by), items in groupby(
+        history, key=lambda h: (h["changed_at"], h["changed_by"])
+    ):
+        entries = list(items)
+        short = [e for e in entries if e["field"] in SHORT_FIELDS]
+        long  = [e for e in entries if e["field"] not in SHORT_FIELDS]
+        grouped_history.append({
+            "changed_at": changed_at,
+            "changed_by": changed_by,
+            "short": short,
+            "long": long,
+        })
+
     return templates.TemplateResponse(request, "issue.html", {
         "issue": data,
         "tags": tags,
         "history": history,
+        "grouped_history": grouped_history,
+        "SHORT_FIELDS": SHORT_FIELDS,
     })
 
 
