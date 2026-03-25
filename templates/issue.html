@@ -79,12 +79,12 @@
     {% if grouped_history %}
     <div class="card">
       <div class="card-header small fw-bold d-flex align-items-center" role="button"
-           data-bs-toggle="collapse" data-bs-target="#historyCollapse" aria-expanded="false"
+           data-bs-toggle="collapse" data-bs-target="#historyCollapse" aria-expanded="true"
            style="cursor:pointer; user-select:none;">
-        <span class="me-auto">변경 이력 ({{ grouped_history|length }}건)</span>
-        <span class="tl-toggle-icon text-muted">▶</span>
+        <span class="me-auto">이력 ({{ grouped_history|length }}건)</span>
+        <span class="tl-toggle-icon text-muted">▼</span>
       </div>
-      <div class="collapse" id="historyCollapse">
+      <div class="collapse show" id="historyCollapse">
         <div class="card-body py-2 px-3">
           <div class="timeline">
           {% for grp in grouped_history %}
@@ -110,15 +110,16 @@
                 {% endfor %}
 
                 {% for e in grp.long %}
-                <div class="small mb-1">
-                  <span class="text-muted">{{ e.field }}</span>
-                  <span class="text-muted mx-1">→</span>
+                <div class="mb-2">
+                  <div class="field-label mb-1">
+                    {{ e.field_label if e.field_label else e.field }}
+                    {% if grp.note %}<span class="text-muted fw-normal ms-1">· {{ grp.note }}</span>{% endif %}
+                  </div>
                   {% if e.new_value and e.new_value != "None" %}
-                  <span class="text-body">{{ e.new_value }}</span>
+                  <div class="border rounded px-3 py-2 small bg-body-secondary" style="white-space:pre-wrap;">{{ e.new_value }}</div>
                   {% else %}
-                  <span class="text-muted fst-italic">(삭제됨)</span>
+                  <span class="text-muted fst-italic small">(삭제됨)</span>
                   {% endif %}
-                  {% if e.note %}<span class="text-muted ms-1">· {{ e.note }}</span>{% endif %}
                 </div>
                 {% endfor %}
               </div>

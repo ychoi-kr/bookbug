@@ -60,10 +60,29 @@ def label(mapping, key):
     text, color = mapping.get(key, (key, "secondary"))
     return {"text": text, "color": color}
 
+FIELD_LABEL = {
+    "title":       "제목",
+    "description": "문제 내용",
+    "suggestion":  "교정 의견",
+    "resolution":  "처리 내용",
+    "status":      "상태",
+    "severity":    "심각도",
+    "category":    "유형",
+    "chapter":     "장",
+    "location":    "위치",
+    "assignee":    "담당자",
+    "reporter":    "보고자",
+    "source":      "출처",
+    "deleted_at":  "삭제",
+}
+
+LONG_FIELDS = {"description", "suggestion", "resolution", "title"}
+
 templates.env.globals["status_label"]   = lambda k: label(STATUS_LABEL, k)
 templates.env.globals["severity_label"] = lambda k: label(SEVERITY_LABEL, k)
 templates.env.globals["VALID_STATUSES"]   = VALID_STATUSES
 templates.env.globals["VALID_SEVERITIES"] = VALID_SEVERITIES
+templates.env.globals["FIELD_LABEL"]      = FIELD_LABEL
 
 
 # ─── 프로젝트 목록 ─────────────────────────────────────────────────────────────
@@ -154,9 +173,13 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
         entries = list(items)
         short = [e for e in entries if e["field"] in SHORT_FIELDS]
         long  = [e for e in entries if e["field"] not in SHORT_FIELDS]
+        # long 항목에 한국어 레이블 추가
+        for e in long:
+            e["field_label"] = FIELD_LABEL.get(e["field"], e["field"])
         grouped_history.append({
             "changed_at": changed_at,
             "changed_by": changed_by,
+            "note": entries[0].get("note", "") if entries else "",
             "short": short,
             "long": long,
         })

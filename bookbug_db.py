@@ -201,11 +201,11 @@ def db_project_list(conn: sqlite3.Connection) -> list:
     ).fetchall()
     result = []
     for r in rows:
-        open_count = conn.execute(
-            "SELECT COUNT(*) FROM issues WHERE project_id=? AND deleted_at IS NULL "
-            "AND status NOT IN ('resolved','wontfix')",
+        status_rows = conn.execute(
+            "SELECT status, COUNT(*) as cnt FROM issues WHERE project_id=? AND deleted_at IS NULL GROUP BY status",
             (r["id"],)
-        ).fetchone()[0]
+        ).fetchall()
+        by_status = {row["status"]: row["cnt"] for row in status_rows}
         result.append({
             "slug": r["slug"],
             "title": r["title"],
@@ -213,7 +213,7 @@ def db_project_list(conn: sqlite3.Connection) -> list:
             "base_path": r["base_path"],
             "created_at": r["created_at"],
             "issue_count": r["issue_count"],
-            "open_count": open_count,
+            "by_status": by_status,
         })
     return result
 
@@ -256,6 +256,16 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int,
             (project_id, key, title, description, "open", category,
              severity, location, chapter, assignee, reporter, suggestion, source)
         )
+        conn.commit()
+        issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        # 초기값을 history에 기록 (타임라인 기준점)
+        for field, val in [("description", description), ("suggestion", suggestion)]:
+            if val:
+                conn.execute(
+                    "INSERT INTO issue_history(issue_id, field, old_value, new_value, changed_by, note) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (issue_id, field, "", val, reporter, "최초 등록")
+                )
         conn.commit()
         return {"ok": True, "issue_key": key, "title": title}
     except sqlite3.IntegrityError as e:
