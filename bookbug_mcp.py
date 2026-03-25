@@ -115,7 +115,12 @@ def issue_add(
     suggestion: str = "",
     source: str = "manual",
 ) -> dict:
-    """새 이슈를 등록한다. issue_key는 자동 생성."""
+    """새 이슈를 등록한다. issue_key는 자동 생성.
+
+    description: 문제 상황 기술. 원고의 어떤 부분이 왜 문제인지 사실 중심으로 기록.
+    suggestion: 교정 의견. 어떻게 고치면 좋은지 구체적 방향 제시. 판단이 서지 않으면 비워둬도 됨.
+    (resolution은 처리 후 issue_update로 별도 기입)
+    """
     if severity not in VALID_SEVERITIES:
         return {"ok": False, "error": f"유효하지 않은 심각도: '{severity}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
     with get_db() as conn:
