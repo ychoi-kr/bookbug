@@ -183,6 +183,14 @@ def issue_update(
 
     description(문제 내용)은 수정 불가 — 잘못 작성된 경우 issue_amend를 사용.
     교정 의견은 suggestion, 처리 내용은 resolution 필드를 사용.
+
+    status 값 안내:
+      open        — 확인 대기 중
+      in_progress — 수정 작업 진행 중
+      resolved    — 수정 완료 확인됨
+      wontfix     — 검토했으나 수정하지 않기로 결정 (보고 오류 포함)
+      deferred    — 현재 교에서 보류, 다음 교에서 처리
+      duplicate   — 다른 이슈와 중복
     """
     updates = {}
     for field, val in [
@@ -221,17 +229,6 @@ def issue_amend(issue: str, project: str = "", description: str = "", amended_by
         db_issue_amend(conn, row["id"], row, description, changed_by=amended_by)
     return {"ok": True, "issue_key": row["issue_key"], "amended": True}
 
-
-@mcp.tool()
-def issue_resolve(issue: str, project: str = "", resolution: str = "", resolved_by: str = "") -> dict:
-    """이슈를 resolved 상태로 변경하는 단축 tool."""
-    with get_db() as conn:
-        row = _resolve_issue(conn, issue, project)
-        updates = {"status": "resolved"}
-        if resolution:
-            updates["resolution"] = resolution
-        db_issue_update(conn, row["id"], row, updates, changed_by=resolved_by)
-    return {"ok": True, "issue_key": row["issue_key"], "status": "resolved"}
 
 
 @mcp.tool()
