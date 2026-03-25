@@ -396,9 +396,24 @@ def db_issue_show(conn: sqlite3.Connection, key_or_id: str):
     ]
     return data
 
+def db_issue_amend(conn: sqlite3.Connection, issue_id: int, current_row,
+                   description: str, changed_by: str = "") -> dict:
+    """description 전용 수정 (amend). 변경 이력에 'amend' note로 기록."""
+    record_change(conn, issue_id, "description",
+                  current_row["description"], description,
+                  changed_by=changed_by, note="amend")
+    conn.execute(
+        "UPDATE issues SET description=?, updated_at=datetime('now','localtime') WHERE id=?",
+        (description, issue_id)
+    )
+    conn.commit()
+    return {"ok": True}
+
 def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
                     updates: dict, changed_by: str = "") -> list:
-    """updates dict의 필드만 수정. 변경 이력 기록. 변경된 필드 목록 반환."""
+    """updates dict의 필드만 수정. 변경 이력 기록. 변경된 필드 목록 반환.
+    description 필드는 차단됨 — 수정하려면 db_issue_amend 사용."""
+    updates.pop("description", None)  # description은 amend 전용
     for field, new_val in updates.items():
         record_change(conn, issue_id, field, current_row[field], new_val, changed_by=changed_by)
 

@@ -216,7 +216,6 @@ async def issue_edit_submit(
     slug: str,
     num: str,
     title:       str = Form(""),
-    description: str = Form(""),
     status:      str = Form(""),
     category:    str = Form(""),
     severity:    str = Form(""),
@@ -230,7 +229,7 @@ async def issue_edit_submit(
     ref = f"{slug}#{num}"
     updates = {}
     fields = {
-        "title": title, "description": description, "status": status,
+        "title": title, "status": status,
         "category": category, "severity": severity, "location": location,
         "chapter": chapter, "assignee": assignee, "suggestion": suggestion,
         "resolution": resolution,

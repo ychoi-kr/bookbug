@@ -21,6 +21,7 @@ from bookbug_db import (
     db_issue_list,
     db_issue_show,
     db_issue_update,
+    db_issue_amend,
     db_issue_delete,
     db_tag_add,
     db_tag_remove,
@@ -168,7 +169,6 @@ def issue_update(
     issue: str,
     project: str = "",
     title: Optional[str] = None,
-    description: Optional[str] = None,
     status: Optional[str] = None,
     category: Optional[str] = None,
     severity: Optional[str] = None,
@@ -179,10 +179,14 @@ def issue_update(
     resolution: Optional[str] = None,
     changed_by: str = "",
 ) -> dict:
-    """이슈의 필드를 수정한다. 변경 이력 자동 기록. 전달된 파라미터만 수정."""
+    """이슈의 필드를 수정한다. 변경 이력 자동 기록. 전달된 파라미터만 수정.
+
+    description(문제 내용)은 수정 불가 — 잘못 작성된 경우 issue_amend를 사용.
+    교정 의견은 suggestion, 처리 내용은 resolution 필드를 사용.
+    """
     updates = {}
     for field, val in [
-        ("title", title), ("description", description), ("status", status),
+        ("title", title), ("status", status),
         ("category", category), ("severity", severity), ("location", location),
         ("chapter", chapter), ("assignee", assignee), ("suggestion", suggestion),
         ("resolution", resolution),
@@ -201,6 +205,21 @@ def issue_update(
         row = _resolve_issue(conn, issue, project)
         updated_fields = db_issue_update(conn, row["id"], row, updates, changed_by)
     return {"ok": True, "issue_key": row["issue_key"], "updated_fields": updated_fields}
+
+
+@mcp.tool()
+def issue_amend(issue: str, project: str = "", description: str = "", amended_by: str = "") -> dict:
+    """이슈의 문제 내용(description)을 정정한다.
+
+    최초 등록 시 잘못 작성된 경우에만 사용. 변경 이력에 'amend'로 기록된다.
+    교정 의견 추가는 issue_update의 suggestion 파라미터를 사용.
+    """
+    if not description:
+        raise ToolError("정정할 내용(description)을 입력해 주세요")
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        db_issue_amend(conn, row["id"], row, description, changed_by=amended_by)
+    return {"ok": True, "issue_key": row["issue_key"], "amended": True}
 
 
 @mcp.tool()
