@@ -130,7 +130,6 @@ def project_view(
     request: Request,
     slug: str,
     status:   str = Query(""),
-    heading_no:  str = Query(""),
     category: str = Query(""),
     assignee: str = Query(""),
     severity: str = Query(""),
@@ -143,11 +142,10 @@ def project_view(
         p = db_project_get(conn, slug)
         if not p:
             return HTMLResponse("프로젝트를 찾을 수 없습니다.", status_code=404)
-        issues = db_issue_list(conn, p["id"], status, heading_no, category, assignee, severity, search, sort)
+        issues = db_issue_list(conn, p["id"], status, "", category, assignee, severity, search, sort)
         stats  = db_project_stats(conn, p["id"])
 
         # 필터 옵션 목록 (동적)
-        all_chapters  = sorted({i["heading_no"]  for i in db_issue_list(conn, p["id"]) if i["heading_no"]})
         all_categories = sorted({i["category"] for i in db_issue_list(conn, p["id"]) if i["category"]})
         all_assignees  = sorted({i["assignee"] for i in db_issue_list(conn, p["id"]) if i["assignee"]})
 
@@ -164,11 +162,10 @@ def project_view(
         "page": page,
         "total_pages": total_pages,
         "filters": {
-            "status": status, "heading_no": heading_no, "category": category,
+            "status": status, "category": category,
             "assignee": assignee, "severity": severity, "search": search, "sort": sort,
         },
         "options": {
-            "chapters": all_chapters,
             "categories": all_categories,
             "assignees": all_assignees,
         },
