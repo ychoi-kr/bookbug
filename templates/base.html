@@ -96,24 +96,9 @@ document.addEventListener('click', function(e) {
   const text = btn.dataset.copy;
   navigator.clipboard.writeText(text).then(function() {
     const icon = btn.querySelector('i');
-    icon.className = 'bi bi-clipboard-check';
-    btn.classList.add('btn-success');
-    btn.classList.remove('btn-outline-secondary');
-    // Copied! 토스트
-    let toast = document.getElementById('copy-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'copy-toast';
-      toast.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;padding:.4rem .9rem;background:#198754;color:#fff;border-radius:.4rem;font-size:.85rem;opacity:0;transition:opacity .2s;';
-      document.body.appendChild(toast);
-    }
-    toast.textContent = 'Copied!';
-    toast.style.opacity = '1';
+    icon.className = 'bi bi-clipboard-check text-success';
     setTimeout(function() {
-      toast.style.opacity = '0';
       icon.className = 'bi bi-clipboard';
-      btn.classList.remove('btn-success');
-      btn.classList.add('btn-outline-secondary');
     }, 1500);
   });
 });
