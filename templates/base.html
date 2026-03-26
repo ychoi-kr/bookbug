@@ -94,13 +94,23 @@ document.addEventListener('click', function(e) {
   const btn = e.target.closest('.copy-btn');
   if (!btn) return;
   const text = btn.dataset.copy;
-  navigator.clipboard.writeText(text).then(function() {
+  function showCheck() {
     const icon = btn.querySelector('i');
     icon.className = 'bi bi-clipboard-check text-success';
-    setTimeout(function() {
-      icon.className = 'bi bi-clipboard';
-    }, 1500);
-  });
+    setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 1500);
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(showCheck);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showCheck();
+  }
 });
 </script>
 </body>
