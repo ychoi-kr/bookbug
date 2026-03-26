@@ -121,6 +121,9 @@ def issue_add(
     description: 문제 상황 기술. 원고의 어떤 부분이 왜 문제인지 사실 중심으로 기록.
     suggestion: 교정 의견. 어떻게 고치면 좋은지 구체적 방향 제시. 판단이 서지 않으면 비워둬도 됨.
     (resolution은 처리 후 issue_update로 별도 기입)
+
+    원고 텍스트 인용 시 각 줄 앞에 "> "를 붙여 지시문과 구분할 것.
+    예) "> 단일 프롬프트 방식의 가장 큰 장점은 속도다."
     """
     if severity not in VALID_SEVERITIES:
         return {"ok": False, "error": f"유효하지 않은 심각도: '{severity}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
@@ -183,6 +186,7 @@ def issue_update(
 
     description(문제 내용)은 수정 불가 — 잘못 작성된 경우 issue_amend를 사용.
     교정 의견은 suggestion, 처리 내용은 resolution 필드를 사용.
+    원고 텍스트 인용 시 각 줄 앞에 "> "를 붙여 지시문과 구분할 것.
 
     status 값 안내:
       open        — 확인 대기 중
