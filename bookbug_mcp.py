@@ -136,7 +136,8 @@ def issue_add(
 ) -> dict:
     """새 이슈를 등록한다. issue_key는 자동 생성.
 
-    description: 문제 상황 기술. 원고의 어떤 부분이 왜 문제인지 사실 중심으로 기록.
+    description: 문제 상황 기술. 초기 발견 시점의 문제점을 사실 중심으로 간결하게 기록.
+      추가 분석, 논리적 근거, 수정 방향은 suggestion에 쓸 것. description에 덧붙이지 말 것.
     suggestion: 교정 의견. JSON 구조로 입력:
       {"summary": "전체 요약", "items": [{"before_desc": "...", "before": "...", "after_desc": "...", "after": "..."}]}
       - summary: 교정 의견 전체 요약 (필수)
@@ -209,6 +210,7 @@ def issue_update(
     """이슈의 필드를 수정한다. 변경 이력 자동 기록. 전달된 파라미터만 수정.
 
     description(문제 내용)은 수정 불가 — 잘못 작성된 경우 issue_amend를 사용.
+      추가 분석이나 논리는 description이 아닌 suggestion에 기입할 것.
     교정 의견은 suggestion(JSON 구조), 처리 내용은 resolution 필드를 사용.
     suggestion 형식: {"summary": "...", "items": [{"before_desc","before","after_desc","after"}]}
 
