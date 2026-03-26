@@ -111,12 +111,12 @@
     {% if grouped_history %}
     <div class="card">
       <div class="card-header small fw-bold d-flex align-items-center" role="button"
-           data-bs-toggle="collapse" data-bs-target="#historyCollapse" aria-expanded="true"
+           data-bs-toggle="collapse" data-bs-target="#historyCollapse" aria-expanded="false"
            style="cursor:pointer; user-select:none;">
         <span class="me-auto">이력 ({{ grouped_history|length }}건)</span>
         <span class="tl-toggle-icon text-muted">▼</span>
       </div>
-      <div class="collapse show" id="historyCollapse">
+      <div class="collapse" id="historyCollapse">
         <div class="card-body py-2 px-3">
           <div class="timeline">
           {% for grp in grouped_history %}
