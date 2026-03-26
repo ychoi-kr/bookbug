@@ -40,11 +40,43 @@
     </div>
     {% endif %}
 
-    {% if issue.suggestion %}
+    {% if suggestion_parsed %}
     <div class="card mb-3 border-primary">
       <div class="card-body">
         <div class="field-label mb-1 text-primary">교정 의견</div>
-        <div style="white-space: pre-wrap;">{{ issue.suggestion | linkify_refs(issue.project_slug) }}</div>
+        {% if suggestion_parsed.summary %}
+        <div class="mb-2" style="white-space: pre-wrap;">{{ suggestion_parsed.summary | linkify_refs(issue.project_slug) }}</div>
+        {% endif %}
+        {% if suggestion_parsed.items %}
+        <div class="d-flex flex-column gap-3 mt-2">
+          {% for item in suggestion_parsed.items %}
+          <div class="border rounded p-2">
+            {% if item.before_desc %}
+            <div class="small text-muted mb-1">{{ item.before_desc }}</div>
+            {% endif %}
+            {% if item.before %}
+            <div class="mb-2">
+              <div class="field-label small mb-1">수정 전</div>
+              <pre class="bg-danger-subtle text-danger-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{{ item.before }}</pre>
+            </div>
+            {% endif %}
+            {% if item.after_desc %}
+            <div class="small text-muted mb-1">{{ item.after_desc }}</div>
+            {% endif %}
+            {% if item.after %}
+            <div>
+              <div class="d-flex align-items-center mb-1 gap-2">
+                <span class="field-label small">수정 후</span>
+                <button class="btn btn-outline-secondary btn-sm py-0 px-1 copy-btn" style="font-size:.7rem"
+                  data-copy="{{ item.after }}">복사</button>
+              </div>
+              <pre class="bg-success-subtle text-success-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{{ item.after }}</pre>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
     {% endif %}

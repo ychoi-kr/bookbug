@@ -8,6 +8,7 @@ bookbug_db.py를 직접 import하여 사용 (MCP 서버 불필요).
 import sys
 import os
 import re as _re
+import json as _json
 from markupsafe import Markup, escape
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -85,6 +86,19 @@ templates.env.globals["severity_label"] = lambda k: label(SEVERITY_LABEL, k)
 templates.env.globals["VALID_STATUSES"]   = VALID_STATUSES
 templates.env.globals["VALID_SEVERITIES"] = VALID_SEVERITIES
 templates.env.globals["FIELD_LABEL"]      = FIELD_LABEL
+
+
+def parse_suggestion(value):
+    """suggestion 필드를 JSON으로 파싱. 실패 시 플레인 텍스트로 반환."""
+    if not value:
+        return None
+    try:
+        parsed = _json.loads(value)
+        if isinstance(parsed, dict):
+            return parsed
+    except (_json.JSONDecodeError, ValueError):
+        pass
+    return {"summary": value, "items": []}
 
 
 def linkify_refs(text, project_slug=""):
@@ -210,6 +224,8 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
             "long": long,
         })
 
+    suggestion_parsed = parse_suggestion(data.get("suggestion", ""))
+
     return templates.TemplateResponse(request, "issue.html", {
         "issue": data,
         "tags": tags,
@@ -217,6 +233,7 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
         "grouped_history": grouped_history,
         "SHORT_FIELDS": SHORT_FIELDS,
         "back_url": back_url,
+        "suggestion_parsed": suggestion_parsed,
     })
 
 
@@ -253,6 +270,8 @@ async def issue_edit_submit(
     changed_by:  str = Form("editor"),
 ):
     ref = f"{slug}#{num}"
+    if suggestion:
+        suggestion = _json.dumps(parse_suggestion(suggestion), ensure_ascii=False)
     updates = {}
     fields = {
         "title": title, "status": status,

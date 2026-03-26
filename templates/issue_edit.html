@@ -68,7 +68,8 @@
 
           <div class="mb-3">
             <label class="field-label">교정 의견</label>
-            <textarea name="suggestion" class="form-control" rows="3">{{ issue.suggestion or '' }}</textarea>
+            <textarea name="suggestion" class="form-control font-monospace" rows="6">{{ issue.suggestion or '' }}</textarea>
+            <div class="form-text">JSON 형식: {"summary": "요약", "items": [{"before_desc": "...", "before": "...", "after_desc": "...", "after": "..."}]}</div>
           </div>
 
           <div class="mb-3">

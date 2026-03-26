@@ -5,6 +5,7 @@ FastMCP + Streamable HTTP 기반. 포트 8419.
 DB 위치: ~/.bookbug/bookbug.db
 """
 
+import json as _json
 from typing import Optional
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -31,6 +32,23 @@ from bookbug_db import (
     VALID_STATUSES,
     VALID_SEVERITIES,
 )
+
+def _parse_suggestion(value: str) -> str:
+    """suggestion 입력값을 JSON 구조로 정규화.
+    이미 유효한 JSON이면 그대로, 플레인 텍스트면 summary로 래핑.
+    """
+    if not value:
+        return value
+    try:
+        parsed = _json.loads(value)
+        if isinstance(parsed, dict) and "summary" in parsed:
+            return value  # 이미 올바른 구조
+        raise ValueError
+    except (ValueError, _json.JSONDecodeError):
+        # 플레인 텍스트 → summary로 래핑
+        wrapped = {"summary": value, "items": []}
+        return _json.dumps(wrapped, ensure_ascii=False)
+
 
 mcp = FastMCP(
     name="bookbug",
@@ -119,14 +137,20 @@ def issue_add(
     """새 이슈를 등록한다. issue_key는 자동 생성.
 
     description: 문제 상황 기술. 원고의 어떤 부분이 왜 문제인지 사실 중심으로 기록.
-    suggestion: 교정 의견. 어떻게 고치면 좋은지 구체적 방향 제시. 판단이 서지 않으면 비워둬도 됨.
+    suggestion: 교정 의견. JSON 구조로 입력:
+      {"summary": "전체 요약", "items": [{"before_desc": "...", "before": "...", "after_desc": "...", "after": "..."}]}
+      - summary: 교정 의견 전체 요약 (필수)
+      - items: 수정 위치별 목록 (복수 가능, 각 필드 모두 optional)
+        - before_desc: 수정 전 설명 (위치, 문제점)
+        - before: 수정 전 원고 본문
+        - after_desc: 수정 후 설명
+        - after: 수정 후 원고 본문 (복사/붙여넣기 대상)
+      플레인 텍스트 입력 시 자동으로 summary에 래핑됨.
     (resolution은 처리 후 issue_update로 별도 기입)
-
-    원고 텍스트 인용 시 각 줄 앞에 "> "를 붙여 지시문과 구분할 것.
-    예) "> 단일 프롬프트 방식의 가장 큰 장점은 속도다."
     """
     if severity not in VALID_SEVERITIES:
         return {"ok": False, "error": f"유효하지 않은 심각도: '{severity}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
+    suggestion = _parse_suggestion(suggestion)
     with get_db() as conn:
         p = db_project_get(conn, project)
         if not p:
@@ -185,8 +209,8 @@ def issue_update(
     """이슈의 필드를 수정한다. 변경 이력 자동 기록. 전달된 파라미터만 수정.
 
     description(문제 내용)은 수정 불가 — 잘못 작성된 경우 issue_amend를 사용.
-    교정 의견은 suggestion, 처리 내용은 resolution 필드를 사용.
-    원고 텍스트 인용 시 각 줄 앞에 "> "를 붙여 지시문과 구분할 것.
+    교정 의견은 suggestion(JSON 구조), 처리 내용은 resolution 필드를 사용.
+    suggestion 형식: {"summary": "...", "items": [{"before_desc","before","after_desc","after"}]}
 
     status 값 안내:
       open        — 확인 대기 중
@@ -196,6 +220,8 @@ def issue_update(
       deferred    — 현재 교에서 보류, 다음 교에서 처리
       duplicate   — 다른 이슈와 중복
     """
+    if suggestion is not None:
+        suggestion = _parse_suggestion(suggestion)
     updates = {}
     for field, val in [
         ("title", title), ("status", status),
