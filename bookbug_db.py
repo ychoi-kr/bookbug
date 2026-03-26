@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS issues (
     severity    TEXT NOT NULL DEFAULT 'normal'
                 CHECK(severity IN ('critical','major','normal','minor','trivial')),
     location    TEXT DEFAULT '',
-    chapter     TEXT DEFAULT '',
+    heading_no     TEXT DEFAULT '',
     assignee    TEXT DEFAULT '',
     reporter    TEXT NOT NULL DEFAULT 'claude',
     suggestion  TEXT DEFAULT '',
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS tags (
 
 CREATE INDEX IF NOT EXISTS idx_issues_project  ON issues(project_id);
 CREATE INDEX IF NOT EXISTS idx_issues_status   ON issues(status);
-CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(chapter);
+CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(heading_no);
 CREATE INDEX IF NOT EXISTS idx_issues_category ON issues(category);
 CREATE INDEX IF NOT EXISTS idx_history_issue   ON issue_history(issue_id);
 CREATE INDEX IF NOT EXISTS idx_tags_issue      ON tags(issue_id);
@@ -108,6 +108,13 @@ def get_db():
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT NULL")
             conn.commit()
 
+    # chapter → heading_no 컬럼 rename 마이그레이션
+    existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(issues)")]
+    if "chapter" in existing_cols and "heading_no" not in existing_cols:
+        conn.execute("ALTER TABLE issues ADD COLUMN heading_no TEXT DEFAULT ''")
+        conn.execute("UPDATE issues SET heading_no = chapter")
+        conn.commit()
+
     # issues CHECK 제약에 duplicate 추가 마이그레이션
     # SQLite는 CHECK 변경을 ALTER TABLE로 못 하므로 테이블 재생성
     check_sql = conn.execute(
@@ -129,7 +136,7 @@ def get_db():
                 severity    TEXT NOT NULL DEFAULT 'normal'
                             CHECK(severity IN ('critical','major','normal','minor','trivial')),
                 location    TEXT DEFAULT '',
-                chapter     TEXT DEFAULT '',
+                heading_no     TEXT DEFAULT '',
                 assignee    TEXT DEFAULT '',
                 reporter    TEXT NOT NULL DEFAULT 'claude',
                 suggestion  TEXT DEFAULT '',
@@ -145,7 +152,7 @@ def get_db():
             DROP TABLE issues_old;
             CREATE INDEX IF NOT EXISTS idx_issues_project  ON issues(project_id);
             CREATE INDEX IF NOT EXISTS idx_issues_status   ON issues(status);
-            CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(chapter);
+            CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(heading_no);
             CREATE INDEX IF NOT EXISTS idx_issues_category ON issues(category);
             PRAGMA foreign_keys=ON;
         """)
@@ -244,17 +251,17 @@ def db_project_show(conn: sqlite3.Connection, slug: str):
 
 def db_issue_add(conn: sqlite3.Connection, project_id: int,
                  title: str, description: str = "", category: str = "",
-                 severity: str = "normal", location: str = "", chapter: str = "",
+                 severity: str = "normal", location: str = "", heading_no: str = "",
                  assignee: str = "", reporter: str = "claude",
                  suggestion: str = "", source: str = "manual") -> dict:
     key = next_issue_key(conn, project_id)
     try:
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, chapter, assignee, reporter, suggestion, source)
+               severity, location, heading_no, assignee, reporter, suggestion, source)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, key, title, description, "open", category,
-             severity, location, chapter, assignee, reporter, suggestion, source)
+             severity, location, heading_no, assignee, reporter, suggestion, source)
         )
         conn.commit()
         issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -310,7 +317,7 @@ def db_issue_get(conn: sqlite3.Connection, key_or_id: str, project_slug: str = "
         return None
 
 def db_issue_list(conn: sqlite3.Connection, project_id: int,
-                  status: str = "", chapter: str = "", category: str = "",
+                  status: str = "", heading_no: str = "", category: str = "",
                   assignee: str = "", severity: str = "", search: str = "",
                   sort: str = "default") -> list:
     query = "SELECT * FROM issues WHERE project_id=? AND deleted_at IS NULL"
@@ -321,9 +328,9 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         placeholders = ",".join(["?"] * len(statuses))
         query += f" AND status IN ({placeholders})"
         params.extend(statuses)
-    if chapter:
-        query += " AND chapter=?"
-        params.append(chapter)
+    if heading_no:
+        query += " AND heading_no=?"
+        params.append(heading_no)
     if category:
         query += " AND category=?"
         params.append(category)
@@ -338,7 +345,7 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         term = f"%{search}%"
         params.extend([term, term, term])
 
-    order = "chapter, CAST(issue_key AS INTEGER)"
+    order = "heading_no, CAST(issue_key AS INTEGER)"
     if sort == "severity":
         order = ("CASE severity WHEN 'critical' THEN 1 WHEN 'major' THEN 2 "
                  "WHEN 'normal' THEN 3 WHEN 'minor' THEN 4 ELSE 5 END, " + order)
@@ -363,7 +370,7 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
             "status": r["status"],
             "severity": r["severity"],
             "category": r["category"],
-            "chapter": r["chapter"],
+            "heading_no": r["heading_no"],
             "assignee": r["assignee"],
             "location": r["location"],
             "created_at": r["created_at"],
@@ -512,7 +519,7 @@ def db_project_stats(conn: sqlite3.Connection, project_id: int) -> dict:
         "by_status": by_status,
         "by_severity": by_severity,
         "by_category": group_count("category"),
-        "by_chapter": group_count("chapter"),
+        "by_chapter": group_count("heading_no"),
         "by_assignee": group_count("assignee"),
     }
 
@@ -523,7 +530,7 @@ COLUMN_MAP_RULES = {
     "description": ("메모 내용", "설명", "description", "내용", "메모"),
     "category":    ("유형", "category", "카테고리", "분류"),
     "location":    ("위치", "위치/맥락", "location", "맥락"),
-    "chapter":     ("장", "chapter", "챕터"),
+    "heading_no":     ("장", "heading_no", "챕터"),
     "assignee":    ("처리 주체", "담당자", "assignee", "담당"),
     "reporter":    ("작성자", "보고자", "reporter"),
     "suggestion":  ("교정 의견", "suggestion", "제안", "수정 의견"),
@@ -585,7 +592,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
         desc     = str(r.get(col_map.get("description", ""), "")).strip()
         cat      = str(r.get(col_map.get("category", ""), "")).strip()
         loc      = str(r.get(col_map.get("location", ""), "")).strip()
-        ch       = str(r.get(col_map.get("chapter", ""), "")).strip()
+        ch       = str(r.get(col_map.get("heading_no", ""), "")).strip()
         assignee_raw = str(r.get(col_map.get("assignee", ""), "")).strip()
         assignee = ASSIGNEE_MAP.get(assignee_raw, assignee_raw)
         reporter_raw = str(r.get(col_map.get("reporter", ""), "claude")).strip()
@@ -608,7 +615,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
         key = next_issue_key(conn, project_id)
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, chapter, assignee, reporter, suggestion, source)
+               severity, location, heading_no, assignee, reporter, suggestion, source)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, key, title, desc, status, cat, severity, loc, ch,
              assignee, reporter, suggestion, "import")
@@ -622,7 +629,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
 
 EXPORT_COLUMNS = [
     "issue_key", "title", "description", "status", "category", "severity",
-    "location", "chapter", "assignee", "reporter", "suggestion", "resolution",
+    "location", "heading_no", "assignee", "reporter", "suggestion", "resolution",
     "source", "created_at", "updated_at", "resolved_at",
 ]
 

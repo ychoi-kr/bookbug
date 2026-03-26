@@ -70,10 +70,10 @@
       {% if options.chapters %}
       <div class="col-auto">
         <label class="field-label">장</label>
-        <select name="chapter" class="form-select form-select-sm">
+        <select name="heading_no" class="form-select form-select-sm">
           <option value="">전체</option>
           {% for c in options.chapters %}
-          <option value="{{ c }}" {% if filters.chapter == c %}selected{% endif %}>{{ c }}</option>
+          <option value="{{ c }}" {% if filters.heading_no == c %}selected{% endif %}>{{ c }}</option>
           {% endfor %}
         </select>
       </div>
@@ -116,7 +116,7 @@
           <option value="key_asc" {% if filters.sort == "key_asc" %}selected{% endif %}>번호 오름차순</option>
           <option value="key_desc" {% if filters.sort == "key_desc" %}selected{% endif %}>번호 내림차순</option>
           <option value="severity" {% if filters.sort == "severity" %}selected{% endif %}>심각도순</option>
-          <option value="chapter" {% if filters.sort == "chapter" %}selected{% endif %}>장순</option>
+          <option value="heading_no" {% if filters.sort == "heading_no" %}selected{% endif %}>제목 번호순</option>
           <option value="updated" {% if filters.sort == "updated" %}selected{% endif %}>최근수정</option>
           <option value="created" {% if filters.sort == "created" %}selected{% endif %}>최근등록</option>
         </select>
@@ -164,7 +164,7 @@
           </td>
           <td><span class="badge bg-{{ sl.color }}">{{ sl.text }}</span></td>
           <td><span class="badge bg-{{ svl.color }}">{{ svl.text }}</span></td>
-          <td class="small">{{ i.chapter or "" }}</td>
+          <td class="small">{{ i.heading_no or "" }}</td>
           <td class="small">{{ i.category or "" }}</td>
           <td class="small">{{ i.assignee or "" }}</td>
           <td class="small text-muted reltime" data-time="{{ i.created_at or '' }}"></td>

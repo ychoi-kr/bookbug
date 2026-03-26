@@ -110,7 +110,7 @@ def issue_add(
     category: str = "",
     severity: str = "normal",
     location: str = "",
-    chapter: str = "",
+    heading_no: str = "",
     assignee: str = "",
     reporter: str = "claude",
     suggestion: str = "",
@@ -130,7 +130,7 @@ def issue_add(
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
         return db_issue_add(
             conn, p["id"], title, description, category,
-            severity, location, chapter, assignee, reporter, suggestion, source
+            severity, location, heading_no, assignee, reporter, suggestion, source
         )
 
 
@@ -138,7 +138,7 @@ def issue_add(
 def issue_list(
     project: str,
     status: str = "",
-    chapter: str = "",
+    heading_no: str = "",
     category: str = "",
     assignee: str = "",
     severity: str = "",
@@ -150,7 +150,7 @@ def issue_list(
         p = db_project_get(conn, project)
         if not p:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
-        issues = db_issue_list(conn, p["id"], status, chapter, category, assignee, severity, search, sort)
+        issues = db_issue_list(conn, p["id"], status, heading_no, category, assignee, severity, search, sort)
     return {"project": project, "count": len(issues), "issues": issues}
 
 
@@ -173,7 +173,7 @@ def issue_update(
     category: Optional[str] = None,
     severity: Optional[str] = None,
     location: Optional[str] = None,
-    chapter: Optional[str] = None,
+    heading_no: Optional[str] = None,
     assignee: Optional[str] = None,
     suggestion: Optional[str] = None,
     resolution: Optional[str] = None,
@@ -196,7 +196,7 @@ def issue_update(
     for field, val in [
         ("title", title), ("status", status),
         ("category", category), ("severity", severity), ("location", location),
-        ("chapter", chapter), ("assignee", assignee), ("suggestion", suggestion),
+        ("heading_no", heading_no), ("assignee", assignee), ("suggestion", suggestion),
         ("resolution", resolution),
     ]:
         if val is not None:
@@ -361,7 +361,7 @@ def search_issues(query: str, project: str = "") -> dict:
             "title": r["title"],
             "status": r["status"],
             "category": r["category"],
-            "chapter": r["chapter"],
+            "heading_no": r["heading_no"],
             "location": r["location"],
         }
         for r in rows

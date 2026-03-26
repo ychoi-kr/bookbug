@@ -92,14 +92,14 @@ class TestIssueTools(unittest.TestCase):
         r = mcp.issue_add(
             "test-book", "전체 필드 이슈",
             description="상세 설명", category="맞춤법", severity="major",
-            location="1장 3절", chapter="1", assignee="editor",
+            location="1장 3절", heading_no="1", assignee="editor",
             reporter="claude", suggestion="수정 제안", source="claude",
         )
         self.assertTrue(r["ok"])
         detail = mcp.issue_show(r["issue_key"])
         self.assertEqual(detail["category"], "맞춤법")
         self.assertEqual(detail["severity"], "major")
-        self.assertEqual(detail["chapter"], "1")
+        self.assertEqual(detail["heading_no"], "1")
 
     def test_issue_list_all(self):
         mcp.issue_add("test-book", "이슈 A")
@@ -114,10 +114,10 @@ class TestIssueTools(unittest.TestCase):
         r = mcp.issue_list("test-book", status="open")
         self.assertEqual(r["count"], 1)
 
-    def test_issue_list_chapter_filter(self):
-        mcp.issue_add("test-book", "1장 이슈", chapter="1")
-        mcp.issue_add("test-book", "2장 이슈", chapter="2")
-        r = mcp.issue_list("test-book", chapter="1")
+    def test_issue_list_heading_no_filter(self):
+        mcp.issue_add("test-book", "1장 이슈", heading_no="1")
+        mcp.issue_add("test-book", "2장 이슈", heading_no="2")
+        r = mcp.issue_list("test-book", heading_no="1")
         self.assertEqual(r["count"], 1)
 
     def test_issue_list_search(self):
@@ -288,9 +288,9 @@ class TestStatsAndHistory(unittest.TestCase):
     def setUp(self):
         fresh_db()
         mcp.project_create("stats-proj", "통계 프로젝트")
-        k1 = mcp.issue_add("stats-proj", "이슈 1", category="맞춤법", severity="major", chapter="1")["issue_key"]
-        mcp.issue_add("stats-proj", "이슈 2", category="번역투", severity="normal", chapter="1")
-        mcp.issue_add("stats-proj", "이슈 3", category="맞춤법", severity="minor", chapter="2")
+        k1 = mcp.issue_add("stats-proj", "이슈 1", category="맞춤법", severity="major", heading_no="1")["issue_key"]
+        mcp.issue_add("stats-proj", "이슈 2", category="번역투", severity="normal", heading_no="1")
+        mcp.issue_add("stats-proj", "이슈 3", category="맞춤법", severity="minor", heading_no="2")
         mcp.issue_resolve(k1)
 
     def test_project_stats(self):
@@ -358,8 +358,8 @@ class TestImportExport(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
 
     def test_export_json(self):
-        mcp.issue_add("imp-proj", "이슈 1", chapter="1", category="맞춤법")
-        mcp.issue_add("imp-proj", "이슈 2", chapter="2", category="번역투")
+        mcp.issue_add("imp-proj", "이슈 1", heading_no="1", category="맞춤법")
+        mcp.issue_add("imp-proj", "이슈 2", heading_no="2", category="번역투")
         out = os.path.join(self.tmp_dir, "out.json")
         r = mcp.export_issues("imp-proj", out)
         self.assertTrue(r["ok"])

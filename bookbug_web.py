@@ -70,7 +70,7 @@ FIELD_LABEL = {
     "status":      "상태",
     "severity":    "심각도",
     "category":    "유형",
-    "chapter":     "장",
+    "heading_no":     "제목 번호",
     "location":    "위치",
     "assignee":    "담당자",
     "reporter":    "보고자",
@@ -88,20 +88,27 @@ templates.env.globals["FIELD_LABEL"]      = FIELD_LABEL
 
 
 def linkify_refs(text, project_slug=""):
-    """텍스트에서 #N 또는 slug#N 패턴을 이슈 링크로 변환."""
+    """텍스트에서 #N 또는 slug#N 패턴을 이슈 링크로 변환.
+    원본 텍스트에 regex를 먼저 적용하고 나머지 부분만 HTML escape해야
+    &#34; 같은 엔티티가 이슈 번호로 오인되지 않는다.
+    """
     if not text:
         return text
-    escaped = escape(text)
-    def replace_cross(m):
-        slug = m.group(1)
-        n    = m.group(2)
-        return Markup(f'<a href="/issue/{slug}/{n}">{slug}#{n}</a>')
-    def replace_local(m):
-        n = m.group(1)
-        href = f"/issue/{project_slug}/{n}" if project_slug else "#"
-        return Markup(f'<a href="{href}">#{n}</a>')
-    result = Markup(_re.sub(r'([A-Za-z][A-Za-z0-9_-]*)#(\d+)', replace_cross, str(escaped)))
-    result = Markup(_re.sub(r'(?<![A-Za-z0-9_-])#(\d+)', replace_local, str(result)))
+    pattern = _re.compile(r'([A-Za-z][A-Za-z0-9_-]*)#(\d+)|(?<![A-Za-z0-9_-])#(\d+)')
+    result = Markup()
+    last = 0
+    for m in pattern.finditer(text):
+        result += escape(text[last:m.start()])
+        if m.group(1):  # slug#N
+            slug = m.group(1)
+            n    = m.group(2)
+            result += Markup(f'<a href="/issue/{slug}/{n}">{slug}#{n}</a>')
+        else:           # #N
+            n = m.group(3)
+            href = f"/issue/{project_slug}/{n}" if project_slug else "#"
+            result += Markup(f'<a href="{href}">#{n}</a>')
+        last = m.end()
+    result += escape(text[last:])
     return result
 
 templates.env.filters["linkify_refs"] = linkify_refs
@@ -123,7 +130,7 @@ def project_view(
     request: Request,
     slug: str,
     status:   str = Query(""),
-    chapter:  str = Query(""),
+    heading_no:  str = Query(""),
     category: str = Query(""),
     assignee: str = Query(""),
     severity: str = Query(""),
@@ -136,11 +143,11 @@ def project_view(
         p = db_project_get(conn, slug)
         if not p:
             return HTMLResponse("프로젝트를 찾을 수 없습니다.", status_code=404)
-        issues = db_issue_list(conn, p["id"], status, chapter, category, assignee, severity, search, sort)
+        issues = db_issue_list(conn, p["id"], status, heading_no, category, assignee, severity, search, sort)
         stats  = db_project_stats(conn, p["id"])
 
         # 필터 옵션 목록 (동적)
-        all_chapters  = sorted({i["chapter"]  for i in db_issue_list(conn, p["id"]) if i["chapter"]})
+        all_chapters  = sorted({i["heading_no"]  for i in db_issue_list(conn, p["id"]) if i["heading_no"]})
         all_categories = sorted({i["category"] for i in db_issue_list(conn, p["id"]) if i["category"]})
         all_assignees  = sorted({i["assignee"] for i in db_issue_list(conn, p["id"]) if i["assignee"]})
 
@@ -157,7 +164,7 @@ def project_view(
         "page": page,
         "total_pages": total_pages,
         "filters": {
-            "status": status, "chapter": chapter, "category": category,
+            "status": status, "heading_no": heading_no, "category": category,
             "assignee": assignee, "severity": severity, "search": search, "sort": sort,
         },
         "options": {
@@ -187,7 +194,7 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
 
     # 같은 changed_at + changed_by 묶기 (GitHub 스타일 이벤트 그룹)
     from itertools import groupby
-    SHORT_FIELDS = {"status", "severity", "assignee", "category", "chapter", "reporter", "source"}
+    SHORT_FIELDS = {"status", "severity", "assignee", "category", "heading_no", "reporter", "source"}
     grouped_history = []
     for (changed_at, changed_by), items in groupby(
         history, key=lambda h: (h["changed_at"], h["changed_by"])
@@ -242,7 +249,7 @@ async def issue_edit_submit(
     category:    str = Form(""),
     severity:    str = Form(""),
     location:    str = Form(""),
-    chapter:     str = Form(""),
+    heading_no:     str = Form(""),
     assignee:    str = Form(""),
     suggestion:  str = Form(""),
     resolution:  str = Form(""),
@@ -253,7 +260,7 @@ async def issue_edit_submit(
     fields = {
         "title": title, "status": status,
         "category": category, "severity": severity, "location": location,
-        "chapter": chapter, "assignee": assignee, "suggestion": suggestion,
+        "heading_no": heading_no, "assignee": assignee, "suggestion": suggestion,
         "resolution": resolution,
     }
     with get_db() as conn:
