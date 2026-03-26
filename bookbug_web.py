@@ -7,6 +7,8 @@ bookbug_db.py를 직접 import하여 사용 (MCP 서버 불필요).
 
 import sys
 import os
+import re as _re
+from markupsafe import Markup, escape
 sys.path.insert(0, os.path.dirname(__file__))
 
 from typing import Optional
@@ -83,6 +85,26 @@ templates.env.globals["severity_label"] = lambda k: label(SEVERITY_LABEL, k)
 templates.env.globals["VALID_STATUSES"]   = VALID_STATUSES
 templates.env.globals["VALID_SEVERITIES"] = VALID_SEVERITIES
 templates.env.globals["FIELD_LABEL"]      = FIELD_LABEL
+
+
+def linkify_refs(text, project_slug=""):
+    """텍스트에서 #N 또는 slug#N 패턴을 이슈 링크로 변환."""
+    if not text:
+        return text
+    escaped = escape(text)
+    def replace_cross(m):
+        slug = m.group(1)
+        n    = m.group(2)
+        return Markup(f'<a href="/issue/{slug}/{n}">{slug}#{n}</a>')
+    def replace_local(m):
+        n = m.group(1)
+        href = f"/issue/{project_slug}/{n}" if project_slug else "#"
+        return Markup(f'<a href="{href}">#{n}</a>')
+    result = Markup(_re.sub(r'([A-Za-z][A-Za-z0-9_-]*)#(\d+)', replace_cross, str(escaped)))
+    result = Markup(_re.sub(r'(?<![A-Za-z0-9_-])#(\d+)', replace_local, str(result)))
+    return result
+
+templates.env.filters["linkify_refs"] = linkify_refs
 
 
 # ─── 프로젝트 목록 ─────────────────────────────────────────────────────────────

@@ -35,7 +35,7 @@
     <div class="card mb-3">
       <div class="card-body">
         <div class="field-label mb-1">설명</div>
-        <div style="white-space: pre-wrap;">{{ issue.description }}</div>
+        <div style="white-space: pre-wrap;">{{ issue.description | linkify_refs(issue.project_slug) }}</div>
       </div>
     </div>
     {% endif %}
@@ -44,7 +44,7 @@
     <div class="card mb-3 border-primary">
       <div class="card-body">
         <div class="field-label mb-1 text-primary">교정 의견</div>
-        <div style="white-space: pre-wrap;">{{ issue.suggestion }}</div>
+        <div style="white-space: pre-wrap;">{{ issue.suggestion | linkify_refs(issue.project_slug) }}</div>
       </div>
     </div>
     {% endif %}
@@ -53,7 +53,7 @@
     <div class="card mb-3 border-success">
       <div class="card-body">
         <div class="field-label mb-1 text-success">처리 결과</div>
-        <div style="white-space: pre-wrap;">{{ issue.resolution }}</div>
+        <div style="white-space: pre-wrap;">{{ issue.resolution | linkify_refs(issue.project_slug) }}</div>
       </div>
     </div>
     {% endif %}
@@ -116,7 +116,7 @@
                     {% if grp.note %}<span class="text-muted fw-normal ms-1">· {{ grp.note }}</span>{% endif %}
                   </div>
                   {% if e.new_value and e.new_value != "None" %}
-                  <div class="border rounded px-3 py-2 small bg-body-secondary" style="white-space:pre-wrap;">{{ e.new_value }}</div>
+                  <div class="border rounded px-3 py-2 small bg-body-secondary" style="white-space:pre-wrap;">{{ e.new_value | linkify_refs(issue.project_slug) }}</div>
                   {% else %}
                   <span class="text-muted fst-italic small">(삭제됨)</span>
                   {% endif %}
