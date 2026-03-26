@@ -9,7 +9,6 @@
 {% if projects %}
 <div class="row g-3">
   {% for p in projects %}
-  {% set total = (p.open_count or 0) + (p.in_progress_count or 0) + (p.resolved_count or 0) + (p.wontfix_count or 0) %}
   <div class="col-md-6 col-lg-4">
     <a href="/project/{{ p.slug }}" class="text-decoration-none">
       <div class="card h-100 shadow-sm">
@@ -20,25 +19,19 @@
           <p class="card-text text-muted small mb-3">{{ p.description }}</p>
           {% endif %}
           <div class="d-flex gap-2 flex-wrap">
-            {% if p.open_count %}
-            <span class="badge bg-secondary">열림 {{ p.open_count }}</span>
+            {% for s in [("open","secondary","열림"), ("in_progress","primary","진행"), ("resolved","success","해결"), ("wontfix","warning","유지"), ("deferred","secondary","보류"), ("duplicate","info","중복")] %}
+            {% set cnt = p.by_status.get(s[0], 0) %}
+            {% if cnt %}
+            <span class="badge bg-{{ s[1] }}">{{ s[2] }} {{ cnt }}</span>
             {% endif %}
-            {% if p.in_progress_count %}
-            <span class="badge bg-primary">진행 {{ p.in_progress_count }}</span>
-            {% endif %}
-            {% if p.resolved_count %}
-            <span class="badge bg-success">해결 {{ p.resolved_count }}</span>
-            {% endif %}
-            {% if p.wontfix_count %}
-            <span class="badge bg-warning text-dark">유지 {{ p.wontfix_count }}</span>
-            {% endif %}
-            {% if total == 0 %}
+            {% endfor %}
+            {% if p.issue_count == 0 %}
             <span class="text-muted small">이슈 없음</span>
             {% endif %}
           </div>
         </div>
         <div class="card-footer text-muted small">
-          총 {{ total }}건
+          총 {{ p.issue_count }}건
         </div>
       </div>
     </a>
