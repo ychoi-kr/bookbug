@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS issues (
     reporter    TEXT NOT NULL DEFAULT 'claude',
     suggestion  TEXT DEFAULT '',
     resolution  TEXT DEFAULT '',
-    source      TEXT DEFAULT '',
+    manuscript_ver      TEXT DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     resolved_at TEXT,
@@ -108,6 +108,14 @@ def get_db():
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT NULL")
             conn.commit()
 
+
+    # source → manuscript_ver 컬럼 rename 마이그레이션
+    existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(issues)")]
+    if "source" in existing_cols and "manuscript_ver" not in existing_cols:
+        conn.execute("ALTER TABLE issues ADD COLUMN manuscript_ver TEXT DEFAULT ''")
+        conn.execute("UPDATE issues SET manuscript_ver = CASE WHEN source IN ('claude','manual','') THEN '' ELSE source END")
+        conn.commit()
+
     # chapter → heading_no 컬럼 rename 마이그레이션
     existing_cols = [r[1] for r in conn.execute("PRAGMA table_info(issues)")]
     if "chapter" in existing_cols and "heading_no" not in existing_cols:
@@ -141,7 +149,7 @@ def get_db():
                 reporter    TEXT NOT NULL DEFAULT 'claude',
                 suggestion  TEXT DEFAULT '',
                 resolution  TEXT DEFAULT '',
-                source      TEXT DEFAULT '',
+                manuscript_ver      TEXT DEFAULT '',
                 created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
                 updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
                 resolved_at TEXT,
@@ -253,15 +261,15 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int,
                  title: str, description: str = "", category: str = "",
                  severity: str = "normal", location: str = "", heading_no: str = "",
                  assignee: str = "", reporter: str = "claude",
-                 suggestion: str = "", source: str = "manual") -> dict:
+                 suggestion: str = "", manuscript_ver: str = "") -> dict:
     key = next_issue_key(conn, project_id)
     try:
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, heading_no, assignee, reporter, suggestion, source)
+               severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, key, title, description, "open", category,
-             severity, location, heading_no, assignee, reporter, suggestion, source)
+             severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
         )
         conn.commit()
         issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -615,7 +623,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
         key = next_issue_key(conn, project_id)
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, heading_no, assignee, reporter, suggestion, source)
+               severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, key, title, desc, status, cat, severity, loc, ch,
              assignee, reporter, suggestion, "import")
@@ -630,7 +638,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
 EXPORT_COLUMNS = [
     "issue_key", "title", "description", "status", "category", "severity",
     "location", "heading_no", "assignee", "reporter", "suggestion", "resolution",
-    "source", "created_at", "updated_at", "resolved_at",
+    "manuscript_ver", "created_at", "updated_at", "resolved_at",
 ]
 
 def db_export_issues(conn: sqlite3.Connection, project_id: int,

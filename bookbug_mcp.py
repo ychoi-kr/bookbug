@@ -132,7 +132,7 @@ def issue_add(
     assignee: str = "",
     reporter: str = "claude",
     suggestion: str = "",
-    source: str = "manual",
+    manuscript_ver: str = "",
 ) -> dict:
     """새 이슈를 등록한다. issue_key는 자동 생성.
 
@@ -157,7 +157,7 @@ def issue_add(
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
         return db_issue_add(
             conn, p["id"], title, description, category,
-            severity, location, heading_no, assignee, reporter, suggestion, source
+            severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver
         )
 
 

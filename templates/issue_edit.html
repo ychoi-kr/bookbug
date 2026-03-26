@@ -59,6 +59,10 @@
               <label class="field-label">위치/맥락</label>
               <input type="text" name="location" class="form-control" value="{{ issue.location or '' }}">
             </div>
+            <div class="col-sm-4">
+              <label class="field-label">원고 파일</label>
+              <input type="text" name="manuscript_ver" class="form-control" value="{{ issue.manuscript_ver or '' }}" placeholder="예) 원고_20260326.docx">
+            </div>
           </div>
 
           <div class="mb-3">
