@@ -25,7 +25,9 @@
       {% if issue.category %}<span class="badge bg-light text-dark">{{ issue.category }}</span>{% endif %}
     </div>
   </div>
-  <a href="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/edit" class="btn btn-outline-primary btn-sm">수정</a>
+  {% if not readonly %}
+  <a href="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/edit{% if back_url %}?back={{ back_url | urlencode }}{% endif %}" class="btn btn-outline-primary btn-sm">수정</a>
+  {% endif %}
 </div>
 
 <div class="row g-3">
@@ -91,6 +93,7 @@
     {% endif %}
 
     {# ── 빠른 상태 변경 ── #}
+    {% if not readonly %}
     <div class="card mb-3">
       <div class="card-body py-2">
         <div class="field-label mb-2">상태 변경</div>
@@ -106,6 +109,7 @@
         </form>
       </div>
     </div>
+    {% endif %}
 
     {# ── 변경 이력 (접기/펼치기) ── #}
     {% if grouped_history %}

@@ -13,7 +13,7 @@ from markupsafe import Markup, escape
 sys.path.insert(0, os.path.dirname(__file__))
 
 from typing import Optional
-from fastapi import FastAPI, Request, Form, Query
+from fastapi import FastAPI, Request, Form, Query, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
@@ -37,6 +37,25 @@ from bookbug_db import (
 
 BASE_DIR = os.path.dirname(__file__)
 
+# ─── LAN 접근 판별 ────────────────────────────────────────────────────────────
+
+LAN_PREFIXES = ("172.30.", "192.168.", "10.", "127.")
+
+def _is_lan(request: Request) -> bool:
+    """요청이 LAN에서 왔으면 True. Cloudflare Tunnel 경유 시 False."""
+    ip = request.client.host if request.client else ""
+    return any(ip.startswith(p) for p in LAN_PREFIXES)
+
+def _readonly(request: Request) -> bool:
+    return not _is_lan(request)
+
+def _require_write(request: Request):
+    """쓰기 전용 엔드포인트 앞에서 호출. 읽기 전용이면 403."""
+    if _readonly(request):
+        raise HTTPException(status_code=403, detail="읽기 전용 접근입니다. LAN에서만 수정할 수 있습니다.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 app = FastAPI(title="bookbug", docs_url=None, redoc_url=None)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
@@ -54,9 +73,9 @@ STATUS_LABEL = {
 
 SEVERITY_LABEL = {
     "critical": ("critical", "danger"),
-    "high":     ("high",     "warning"),
+    "major":    ("major",    "warning"),
     "normal":   ("normal",   "secondary"),
-    "low":      ("low",      "light"),
+    "minor":    ("minor",    "info"),
 }
 
 def label(mapping, key):
@@ -134,7 +153,10 @@ templates.env.filters["linkify_refs"] = linkify_refs
 def index(request: Request):
     with get_db() as conn:
         projects = db_project_list(conn)
-    return templates.TemplateResponse(request, "projects.html", {"projects": projects})
+    return templates.TemplateResponse(request, "projects.html", {
+        "projects": projects,
+        "readonly": _readonly(request),
+    })
 
 
 # ─── 이슈 목록 ─────────────────────────────────────────────────────────────────
@@ -152,6 +174,10 @@ def project_view(
     page:     int = Query(1),
 ):
     PAGE_SIZE = 50
+    # 콤마 구분 → 리스트 (템플릿용)
+    status_list   = [s for s in status.split(",")   if s] if status   else []
+    severity_list = [s for s in severity.split(",") if s] if severity else []
+
     with get_db() as conn:
         p = db_project_get(conn, slug)
         if not p:
@@ -176,13 +202,17 @@ def project_view(
         "page": page,
         "total_pages": total_pages,
         "filters": {
-            "status": status, "category": category,
-            "assignee": assignee, "severity": severity, "search": search, "sort": sort,
+            "status": status, "status_list": status_list,
+            "category": category,
+            "assignee": assignee,
+            "severity": severity, "severity_list": severity_list,
+            "search": search, "sort": sort,
         },
         "options": {
             "categories": all_categories,
             "assignees": all_assignees,
         },
+        "readonly": _readonly(request),
     })
 
 
@@ -234,13 +264,16 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
         "SHORT_FIELDS": SHORT_FIELDS,
         "back_url": back_url,
         "suggestion_parsed": suggestion_parsed,
+        "readonly": _readonly(request),
     })
 
 
 # ─── 이슈 수정 폼 ──────────────────────────────────────────────────────────────
 
 @app.get("/issue/{slug}/{num}/edit", response_class=HTMLResponse)
-def issue_edit_form(request: Request, slug: str, num: str):
+def issue_edit_form(request: Request, slug: str, num: str, back: str = ""):
+    from urllib.parse import unquote
+    _require_write(request)
     ref = f"{slug}#{num}"
     with get_db() as conn:
         row = db_issue_get(conn, ref)
@@ -250,6 +283,7 @@ def issue_edit_form(request: Request, slug: str, num: str):
         issue["project_slug"] = slug
     return templates.TemplateResponse(request, "issue_edit.html", {
         "issue": issue,
+        "back_url": unquote(back) if back else "",
     })
 
 
@@ -269,7 +303,9 @@ async def issue_edit_submit(
     suggestion:     str = Form(""),
     resolution:     str = Form(""),
     changed_by:     str = Form("editor"),
+    back:           str = Form(""),
 ):
+    _require_write(request)
     ref = f"{slug}#{num}"
     if suggestion:
         suggestion = _json.dumps(parse_suggestion(suggestion), ensure_ascii=False)
@@ -289,19 +325,23 @@ async def issue_edit_submit(
                 updates[field] = val
         if updates:
             db_issue_update(conn, row["id"], row, updates, changed_by=changed_by)
-    return RedirectResponse(f"/issue/{slug}/{num}", status_code=303)
+    from urllib.parse import quote
+    back_param = f"?back={quote(back)}" if back else ""
+    return RedirectResponse(f"/issue/{slug}/{num}{back_param}", status_code=303)
 
 
 # ─── 빠른 상태 변경 (이슈 목록에서 인라인) ────────────────────────────────────
 
 @app.post("/issue/{slug}/{num}/status")
 async def issue_status_update(
+    request: Request,
     slug: str,
     num: str,
     status:     str = Form(...),
     changed_by: str = Form("editor"),
     back:       str = Form(""),
 ):
+    _require_write(request)
     ref = f"{slug}#{num}"
     with get_db() as conn:
         row = db_issue_get(conn, ref)

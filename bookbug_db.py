@@ -346,8 +346,10 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
         query += " AND assignee=?"
         params.append(assignee)
     if severity:
-        query += " AND severity=?"
-        params.append(severity)
+        severities = [s.strip() for s in severity.split(",")]
+        placeholders = ",".join(["?"] * len(severities))
+        query += f" AND severity IN ({placeholders})"
+        params.extend(severities)
     if search:
         query += " AND (title LIKE ? OR description LIKE ? OR suggestion LIKE ?)"
         term = f"%{search}%"

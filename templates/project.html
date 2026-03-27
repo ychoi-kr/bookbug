@@ -59,13 +59,16 @@
         <input type="text" name="search" class="form-control form-control-sm" placeholder="키워드" value="{{ filters.search }}">
       </div>
       <div class="col-auto">
-        <label class="field-label">상태</label>
-        <select name="status" class="form-select form-select-sm">
-          <option value="">전체</option>
+        <label class="field-label d-block">상태</label>
+        <div class="d-flex gap-1 flex-wrap" id="status-toggles">
           {% for s in VALID_STATUSES %}
-          <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ status_label(s).text }}</option>
+          {% set sl = status_label(s) %}
+          <button type="button"
+            class="btn btn-sm toggle-btn {% if s in filters.status_list %}btn-{{ sl.color }}{% else %}btn-outline-{{ sl.color }}{% endif %}"
+            data-group="status" data-value="{{ s }}">{{ sl.text }}</button>
           {% endfor %}
-        </select>
+        </div>
+        <input type="hidden" name="status" id="status-input" value="{{ filters.status }}">
       </div>
 
       {% if options.categories %}
@@ -91,13 +94,16 @@
       </div>
       {% endif %}
       <div class="col-auto">
-        <label class="field-label">심각도</label>
-        <select name="severity" class="form-select form-select-sm">
-          <option value="">전체</option>
+        <label class="field-label d-block">심각도</label>
+        <div class="d-flex gap-1 flex-wrap" id="severity-toggles">
           {% for s in VALID_SEVERITIES %}
-          <option value="{{ s }}" {% if filters.severity == s %}selected{% endif %}>{{ s }}</option>
+          {% set svl = severity_label(s) %}
+          <button type="button"
+            class="btn btn-sm toggle-btn {% if s in filters.severity_list %}btn-{{ svl.color }}{% else %}btn-outline-{{ svl.color }}{% endif %}"
+            data-group="severity" data-value="{{ s }}">{{ svl.text }}</button>
           {% endfor %}
-        </select>
+        </div>
+        <input type="hidden" name="severity" id="severity-input" value="{{ filters.severity }}">
       </div>
       <div class="col-auto">
         <label class="field-label">정렬</label>
@@ -192,6 +198,37 @@
 {% endif %}
 
 <script>
+// 상태/심각도 토글 버튼
+document.querySelectorAll('.toggle-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const group = btn.dataset.group;
+    const val = btn.dataset.value;
+    const input = document.getElementById(group + '-input');
+    let selected = input.value ? input.value.split(',') : [];
+    const idx = selected.indexOf(val);
+    if (idx === -1) {
+      selected.push(val);
+    } else {
+      selected.splice(idx, 1);
+    }
+    input.value = selected.join(',');
+
+    // 버튼 스타일 토글
+    const colorClass = btn.className.match(/btn-(?:outline-)?(\S+)/);
+    const color = btn.className.replace('btn-outline-', 'btn-').match(/btn-(danger|warning|secondary|info|primary|success|light)/);
+    if (color) {
+      const c = color[1];
+      if (idx === -1) {
+        btn.classList.remove('btn-outline-' + c);
+        btn.classList.add('btn-' + c);
+      } else {
+        btn.classList.remove('btn-' + c);
+        btn.classList.add('btn-outline-' + c);
+      }
+    }
+  });
+});
+
 function reltime(dateStr) {
   if (!dateStr) return '';
   const now = new Date();
