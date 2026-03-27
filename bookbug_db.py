@@ -144,28 +144,40 @@ def db_project_create(conn: sqlite3.Connection, slug: str, title: str,
         return {"ok": False, "error": f"슬러그 '{slug}'는 이미 존재합니다"}
 
 def db_project_list(conn: sqlite3.Connection) -> list:
+    # 프로젝트 목록 + 상태별 카운트를 쿼리 2번으로 처리 (N+1 방지)
     rows = conn.execute(
         "SELECT p.*, COUNT(i.id) as issue_count FROM projects p "
         "LEFT JOIN issues i ON p.id=i.project_id AND i.deleted_at IS NULL "
         "WHERE p.deleted_at IS NULL GROUP BY p.id ORDER BY p.updated_at DESC"
     ).fetchall()
-    result = []
-    for r in rows:
-        status_rows = conn.execute(
-            "SELECT status, COUNT(*) as cnt FROM issues WHERE project_id=? AND deleted_at IS NULL GROUP BY status",
-            (r["id"],)
-        ).fetchall()
-        by_status = {row["status"]: row["cnt"] for row in status_rows}
-        result.append({
+    if not rows:
+        return []
+
+    project_ids = [r["id"] for r in rows]
+    placeholders = ",".join(["?"] * len(project_ids))
+    status_rows = conn.execute(
+        f"SELECT project_id, status, COUNT(*) as cnt FROM issues "
+        f"WHERE project_id IN ({placeholders}) AND deleted_at IS NULL "
+        f"GROUP BY project_id, status",
+        project_ids
+    ).fetchall()
+
+    by_status_map: dict = {}
+    for sr in status_rows:
+        by_status_map.setdefault(sr["project_id"], {})[sr["status"]] = sr["cnt"]
+
+    return [
+        {
             "slug": r["slug"],
             "title": r["title"],
             "description": r["description"],
             "base_path": r["base_path"],
             "created_at": r["created_at"],
             "issue_count": r["issue_count"],
-            "by_status": by_status,
-        })
-    return result
+            "by_status": by_status_map.get(r["id"], {}),
+        }
+        for r in rows
+    ]
 
 def db_project_get(conn: sqlite3.Connection, slug: str):
     return conn.execute(
