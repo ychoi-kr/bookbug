@@ -13,7 +13,7 @@ from pathlib import Path
 DB_DIR = Path.home() / ".bookbug"
 DB_PATH = DB_DIR / "bookbug.db"
 
-VALID_STATUSES = ("open", "in_progress", "resolved", "wontfix", "deferred")
+VALID_STATUSES = ("open", "in_progress", "resolved", "wontfix", "deferred", "duplicate")
 VALID_SEVERITIES = ("critical", "major", "normal", "minor", "trivial")
 
 # ─── Schema ───────────────────────────────────────────────────────────────────
