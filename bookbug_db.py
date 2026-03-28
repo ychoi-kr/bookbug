@@ -204,34 +204,49 @@ def db_project_show(conn: sqlite3.Connection, slug: str):
 
 # ─── 이슈 CRUD ────────────────────────────────────────────────────────────────
 
+_VALID_SEVERITIES = ("critical", "major", "normal", "minor", "trivial")
+
 def db_issue_add(conn: sqlite3.Connection, project_id: int,
                  title: str, description: str = "", category: str = "",
                  severity: str = "normal", location: str = "", heading_no: str = "",
                  assignee: str = "", reporter: str = "claude",
                  suggestion: str = "", manuscript_ver: str = "") -> dict:
-    key = next_issue_key(conn, project_id)
-    try:
-        conn.execute(
-            """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (project_id, key, title, description, "open", category,
-             severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+    """이슈를 등록하고 {'ok': True, 'id': <row_id>, 'issue_key': N, 'title': '...'} 반환.
+
+    올바른 호출 예시:
+        db_issue_add(conn, project_id, "제목", description="설명", severity="major")
+
+    severity 허용값: critical / major / normal / minor / trivial
+    잘못된 severity는 ValueError를 발생시킵니다.
+
+    주의: dict를 첫 번째 인자로 넘기면 TypeError가 발생합니다.
+    project_id와 title은 반드시 위치/키워드 인자로 전달하세요.
+    """
+    if severity not in _VALID_SEVERITIES:
+        raise ValueError(
+            f"invalid severity {severity!r}. "
+            f"allowed: {', '.join(_VALID_SEVERITIES)}"
         )
-        conn.commit()
-        issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        # 초기값을 history에 기록 (타임라인 기준점)
-        for field, val in [("description", description), ("suggestion", suggestion)]:
-            if val:
-                conn.execute(
-                    "INSERT INTO issue_history(issue_id, field, old_value, new_value, changed_by, note) "
-                    "VALUES(?,?,?,?,?,?)",
-                    (issue_id, field, "", val, reporter, "최초 등록")
-                )
-        conn.commit()
-        return {"ok": True, "issue_key": key, "title": title}
-    except sqlite3.IntegrityError as e:
-        return {"ok": False, "error": str(e)}
+    key = next_issue_key(conn, project_id)
+    conn.execute(
+        """INSERT INTO issues(project_id, issue_key, title, description, status, category,
+           severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (project_id, key, title, description, "open", category,
+         severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+    )
+    conn.commit()
+    issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    # 초기값을 history에 기록 (타임라인 기준점)
+    for field, val in [("description", description), ("suggestion", suggestion)]:
+        if val:
+            conn.execute(
+                "INSERT INTO issue_history(issue_id, field, old_value, new_value, changed_by, note) "
+                "VALUES(?,?,?,?,?,?)",
+                (issue_id, field, "", val, reporter, "최초 등록")
+            )
+    conn.commit()
+    return {"ok": True, "id": issue_id, "issue_key": key, "title": title}
 
 def db_issue_get(conn: sqlite3.Connection, key_or_id: str, project_slug: str = ""):
     """issue_key(정수 문자열) 또는 내부 id로 이슈 조회.
@@ -372,6 +387,23 @@ def db_issue_amend(conn: sqlite3.Connection, issue_id: int, current_row,
     )
     conn.commit()
     return {"ok": True}
+
+def db_issue_update_simple(conn: sqlite3.Connection, issue_id: int,
+                           updates: dict, changed_by: str = "") -> list:
+    """issue_id만으로 이슈를 업데이트하는 편의 함수.
+    내부에서 current_row를 자동으로 조회하므로 별도 get 호출이 필요 없음.
+
+    사용 예:
+        db_issue_update_simple(conn, issue_id, {'status': 'resolved'}, changed_by='claude')
+
+    issue_id가 존재하지 않으면 ValueError를 발생시킵니다.
+    """
+    row = conn.execute(
+        "SELECT * FROM issues WHERE id=? AND deleted_at IS NULL", (issue_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"issue id={issue_id}를 찾을 수 없습니다")
+    return db_issue_update(conn, issue_id, row, updates, changed_by=changed_by)
 
 def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
                     updates: dict, changed_by: str = "") -> list:
