@@ -49,7 +49,7 @@
         {% if suggestion_parsed.summary %}
         <div class="mb-2" style="white-space: pre-wrap;">{{ suggestion_parsed.summary | linkify_refs(issue.project_slug) }}</div>
         {% endif %}
-        {% if suggestion_parsed['items'] %}
+        {% if suggestion_parsed.items is not callable and suggestion_parsed['items'] %}
         <div class="d-flex flex-column gap-3 mt-2">
           {% for item in suggestion_parsed['items'] %}
           <div class="border rounded p-2">

@@ -114,6 +114,7 @@ def parse_suggestion(value):
     try:
         parsed = _json.loads(value)
         if isinstance(parsed, dict):
+            parsed.setdefault("items", [])
             return parsed
     except (_json.JSONDecodeError, ValueError):
         pass
