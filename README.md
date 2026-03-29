@@ -1,22 +1,39 @@
 # bookbug
 
-출판 원고 교정용 이슈 트래커 MCP 서버.
+출판 원고 교정용 이슈 트래커.
 
-Claude 에이전트가 원고를 검토하고 이슈를 등록하면, 편집자가 MCP 클라이언트를 통해 확인·처리하는 워크플로를 지원한다.
+AI 에이전트나 사람이 원고를 검토하고 이슈를 등록하면, 편집자가 웹 UI 또는 MCP 클라이언트를 통해 확인·처리하는 워크플로를 지원한다.
 
 ## 구성
 
 - `bookbug_db.py` — SQLite DB 레이어 (프로젝트/이슈 CRUD, 소프트 딜리트, 임포트/익스포트)
 - `bookbug_mcp.py` — FastMCP 기반 MCP 서버 (포트 8419)
+- `bookbug_web.py` — FastAPI + Jinja2 웹 UI (포트 8420)
 - `test_bookbug_mcp.py` — 테스트 스위트
 
 ## 실행
 
+### launchd (macOS, 자동 시작 권장)
+
+`/Library/LaunchDaemons`에 plist를 등록하면 부팅 시 자동 실행된다.
+
+### 수동 실행
+
 ```bash
+# MCP 서버
 .venv/bin/python bookbug_mcp.py
+
+# 웹 UI
+.venv/bin/python bookbug_web.py
 ```
 
 DB 위치: `~/.bookbug/bookbug.db`
+
+## 웹 UI 접속
+
+```
+http://<서버_IP>:8420
+```
 
 ## MCP 클라이언트 설정
 
@@ -56,7 +73,7 @@ DB 위치: `~/.bookbug/bookbug.db`
 
 `<서버_IP>`는 bookbug 서버가 실행 중인 기기의 LAN IP로 바꿀 것.
 
-## 구현된 Tools
+## 구현된 MCP Tools
 
 | Tool | 설명 |
 |------|------|
