@@ -2,44 +2,53 @@
 
 출판 원고 교정용 이슈 트래커.
 
-AI 에이전트나 사람이 원고를 검토하고 이슈를 등록하면, 편집자가 웹 UI 또는 MCP 클라이언트를 통해 확인·처리하는 워크플로를 지원한다.
+AI 에이전트나 사람이 원고를 검토하며 이슈를 등록하고, 편집자가 확인·처리하는 워크플로를 지원한다. MCP 서버와 웹 UI를 함께 제공한다.
 
-## 구성
+## 주요 기능
 
-- `bookbug_db.py` — SQLite DB 레이어 (프로젝트/이슈 CRUD, 소프트 딜리트, 임포트/익스포트)
-- `bookbug_mcp.py` — FastMCP 기반 MCP 서버 (포트 8419)
-- `bookbug_web.py` — FastAPI + Jinja2 웹 UI (포트 8420)
-- `test_bookbug_mcp.py` — 테스트 스위트
+- 프로젝트별 이슈 관리 (등록·수정·완료·삭제)
+- 상태·심각도·담당자·장절 번호 기준 필터·정렬
+- 이슈 변경 이력 자동 기록
+- 태그, 일괄 상태 변경, 전체 텍스트 검색
+- 엑셀 임포트 / xlsx·csv·json 익스포트
+- 웹 UI (브라우저) + MCP 인터페이스 (AI 에이전트·클라이언트) 동시 지원
+
+## 설치
+
+```bash
+git clone https://github.com/ychoi-kr/bookbug.git
+cd bookbug
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
+
+DB는 첫 실행 시 `~/.bookbug/bookbug.db`에 자동 생성된다.
 
 ## 실행
 
-### launchd (macOS, 자동 시작 권장)
-
-`/Library/LaunchDaemons`에 plist를 등록하면 부팅 시 자동 실행된다.
-
-### 수동 실행
-
 ```bash
-# MCP 서버
-.venv/bin/python bookbug_mcp.py
-
-# 웹 UI
+# 웹 UI (포트 8420)
 .venv/bin/python bookbug_web.py
+
+# MCP 서버 (포트 8419)
+.venv/bin/python bookbug_mcp.py
 ```
 
-DB 위치: `~/.bookbug/bookbug.db`
+macOS에서 부팅 시 자동 실행하려면 `/Library/LaunchDaemons`에 plist를 등록한다.
 
-## 웹 UI 접속
+## 웹 UI
+
+브라우저에서 접속:
 
 ```
 http://<서버_IP>:8420
 ```
 
-## MCP 클라이언트 설정
+## MCP 클라이언트 연결
 
-### Claude Desktop (같은 기기)
+### 같은 기기
 
-`~/Library/Application Support/Claude/claude_desktop_config.json`에 추가:
+`~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -51,9 +60,7 @@ http://<서버_IP>:8420
 }
 ```
 
-### Claude Desktop (LAN 내 다른 기기, mcp-remote 사용)
-
-`--allow-http` 플래그가 필요하다. mcp-remote는 기본적으로 HTTP URL을 거부하기 때문.
+### LAN 내 다른 기기 (mcp-remote 사용)
 
 ```json
 {
@@ -71,9 +78,9 @@ http://<서버_IP>:8420
 }
 ```
 
-`<서버_IP>`는 bookbug 서버가 실행 중인 기기의 LAN IP로 바꿀 것.
+`--allow-http`는 mcp-remote가 HTTP URL을 기본 차단하기 때문에 필요하다.
 
-## 구현된 MCP Tools
+## MCP Tools
 
 | Tool | 설명 |
 |------|------|
