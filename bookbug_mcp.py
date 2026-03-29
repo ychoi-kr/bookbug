@@ -261,6 +261,31 @@ def issue_amend(issue: str, project: str = "", description: str = "", amended_by
     return {"ok": True, "issue_key": row["issue_key"], "amended": True}
 
 
+@mcp.tool()
+def issue_resolve(
+    issue: str,
+    project: str = "",
+    resolution: str = "",
+    resolved_by: str = "",
+) -> dict:
+    """이슈를 resolved 상태로 변경한다. 필요 시 처리 결과(resolution)도 함께 기록한다."""
+    updates = {"status": "resolved"}
+    if resolution:
+        updates["resolution"] = resolution
+
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        updated_fields = db_issue_update(conn, row["id"], row, updates, changed_by=resolved_by)
+        refreshed = db_issue_get(conn, row["id"])
+    return {
+        "ok": True,
+        "issue_key": row["issue_key"],
+        "status": "resolved",
+        "updated_fields": updated_fields,
+        "resolved_at": refreshed["resolved_at"] if refreshed else None,
+    }
+
+
 
 @mcp.tool()
 def issue_delete(issue: str, deleted_by: str = "") -> dict:
