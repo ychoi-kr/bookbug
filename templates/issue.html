@@ -138,9 +138,19 @@
                 {% for e in grp.short %}
                 <div class="small mb-1">
                   <span class="text-muted">{{ e.field }}</span>
+                  {% if e.field == "severity" %}
+                  <span class="badge bg-{{ severity_label(e.old_value).color }} ms-1">{{ e.old_value or "(없음)" }}</span>
+                  <span class="text-muted mx-1">→</span>
+                  <span class="badge bg-{{ severity_label(e.new_value).color }}">{{ e.new_value or "(없음)" }}</span>
+                  {% elif e.field == "status" %}
+                  <span class="badge bg-{{ status_label(e.old_value).color }} ms-1">{{ status_label(e.old_value).text or "(없음)" }}</span>
+                  <span class="text-muted mx-1">→</span>
+                  <span class="badge bg-{{ status_label(e.new_value).color }}">{{ status_label(e.new_value).text or "(없음)" }}</span>
+                  {% else %}
                   <span class="badge bg-danger-subtle text-danger-emphasis ms-1">{{ e.old_value or "(없음)" }}</span>
                   <span class="text-muted mx-1">→</span>
                   <span class="badge bg-success-subtle text-success-emphasis">{{ e.new_value or "(없음)" }}</span>
+                  {% endif %}
                   {% if e.note %}<span class="text-muted ms-1">· {{ e.note }}</span>{% endif %}
                 </div>
                 {% endfor %}
