@@ -409,7 +409,8 @@ def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
                     updates: dict, changed_by: str = "") -> list:
     """updates dict의 필드만 수정. 변경 이력 기록. 변경된 필드 목록 반환.
     description 필드는 차단됨 — 수정하려면 db_issue_amend 사용."""
-    updates.pop("description", None)  # description은 amend 전용
+    if "description" in updates:
+        raise ValueError("description 필드는 db_issue_update로 수정할 수 없습니다. db_issue_amend를 사용하세요.")
     for field, new_val in updates.items():
         record_change(conn, issue_id, field, current_row[field], new_val, changed_by=changed_by)
 
