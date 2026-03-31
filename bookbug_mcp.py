@@ -271,8 +271,8 @@ def issue_delete(issue: str, deleted_by: str = "") -> dict:
 # ─── 일괄 처리 ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def issue_batch_update(issues: str, status: str, changed_by: str = "") -> dict:
-    """여러 이슈의 상태를 한 번에 변경한다. issues: 이슈 키 쉼표 구분."""
+def issue_batch_update(issues: str, status: str, changed_by: str = "", project: str = "") -> dict:
+    """여러 이슈의 상태를 한 번에 변경한다. issues: 이슈 키 쉼표 구분. project: 프로젝트 슬러그 (복수 프로젝트 환경에서 필수)."""
     if status not in VALID_STATUSES:
         return {"ok": False, "error": f"유효하지 않은 상태: '{status}'. 허용값: {', '.join(VALID_STATUSES)}"}
     keys = [k.strip() for k in issues.split(",") if k.strip()]
@@ -280,7 +280,7 @@ def issue_batch_update(issues: str, status: str, changed_by: str = "") -> dict:
     skipped = []
     with get_db() as conn:
         for key in keys:
-            row = db_issue_get(conn, key)
+            row = db_issue_get(conn, key, project_slug=project)
             if not row:
                 skipped.append(key)
                 continue
