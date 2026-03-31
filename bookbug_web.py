@@ -94,7 +94,7 @@ FIELD_LABEL = {
     "location":    "위치",
     "assignee":    "담당자",
     "reporter":    "보고자",
-    "manuscript_ver":      "원고 파일",
+    "manuscript":      "원고 파일/URL",
     "deleted_at":  "삭제",
 }
 
@@ -236,7 +236,7 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
 
     # 같은 changed_at + changed_by 묶기 (GitHub 스타일 이벤트 그룹)
     from itertools import groupby
-    SHORT_FIELDS = {"status", "severity", "assignee", "category", "heading_no", "reporter", "manuscript_ver"}
+    SHORT_FIELDS = {"status", "severity", "assignee", "category", "heading_no", "reporter", "manuscript"}
     grouped_history = []
     for (changed_at, changed_by), items in groupby(
         history, key=lambda h: (h["changed_at"], h["changed_by"])
@@ -300,7 +300,7 @@ async def issue_edit_submit(
     location:    str = Form(""),
     heading_no:     str = Form(""),
     assignee:       str = Form(""),
-    manuscript_ver: str = Form(""),
+    manuscript: str = Form(""),
     suggestion:     str = Form(""),
     resolution:     str = Form(""),
     changed_by:     str = Form("editor"),
@@ -314,7 +314,7 @@ async def issue_edit_submit(
     fields = {
         "title": title, "status": status,
         "category": category, "severity": severity, "location": location,
-        "heading_no": heading_no, "assignee": assignee, "manuscript_ver": manuscript_ver, "suggestion": suggestion,
+        "heading_no": heading_no, "assignee": assignee, "manuscript": manuscript, "suggestion": suggestion,
         "resolution": resolution,
     }
     with get_db() as conn:

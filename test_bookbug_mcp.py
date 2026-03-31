@@ -93,7 +93,7 @@ class TestIssueTools(unittest.TestCase):
             "test-book", "전체 필드 이슈",
             description="상세 설명", category="맞춤법", severity="major",
             location="1장 3절", heading_no="1", assignee="editor",
-            reporter="claude", suggestion="수정 제안", manuscript_ver="claude",
+            reporter="claude", suggestion="수정 제안", manuscript="claude",
         )
         self.assertTrue(r["ok"])
         detail = mcp.issue_show(r["issue_key"])

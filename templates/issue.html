@@ -193,7 +193,7 @@
         {{ field("위치/맥락", issue.location) }}
         {{ field("담당자", issue.assignee) }}
         {{ field("보고자", issue.reporter) }}
-        {{ field("원고 파일", issue.manuscript_ver) }}
+        {{ field("원고 파일/URL", issue.manuscript) }}
         <div class="mb-2">
           <div class="field-label">등록일</div>
           <div class="small">{{ issue.created_at[:16] if issue.created_at else "" }}</div>

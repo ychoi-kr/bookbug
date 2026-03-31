@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS issues (
     reporter    TEXT NOT NULL DEFAULT 'claude',
     suggestion  TEXT DEFAULT '',
     resolution  TEXT DEFAULT '',
-    manuscript_ver      TEXT DEFAULT '',
+    manuscript      TEXT DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     resolved_at TEXT,
@@ -210,7 +210,7 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int,
                  title: str, description: str = "", category: str = "",
                  severity: str = "normal", location: str = "", heading_no: str = "",
                  assignee: str = "", reporter: str = "claude",
-                 suggestion: str = "", manuscript_ver: str = "") -> dict:
+                 suggestion: str = "", manuscript: str = "") -> dict:
     """이슈를 등록하고 {'ok': True, 'id': <row_id>, 'issue_key': N, 'title': '...'} 반환.
 
     올바른 호출 예시:
@@ -230,10 +230,10 @@ def db_issue_add(conn: sqlite3.Connection, project_id: int,
     key = next_issue_key(conn, project_id)
     conn.execute(
         """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-           severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+           severity, location, heading_no, assignee, reporter, suggestion, manuscript)
            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (project_id, key, title, description, "open", category,
-         severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+         severity, location, heading_no, assignee, reporter, suggestion, manuscript)
     )
     conn.commit()
     issue_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -604,7 +604,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
         key = next_issue_key(conn, project_id)
         conn.execute(
             """INSERT INTO issues(project_id, issue_key, title, description, status, category,
-               severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver)
+               severity, location, heading_no, assignee, reporter, suggestion, manuscript)
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (project_id, key, title, desc, status, cat, severity, loc, ch,
              assignee, reporter, suggestion, "import")
@@ -619,7 +619,7 @@ def db_import_xlsx(conn: sqlite3.Connection, project_id: int,
 EXPORT_COLUMNS = [
     "issue_key", "title", "description", "status", "category", "severity",
     "location", "heading_no", "assignee", "reporter", "suggestion", "resolution",
-    "manuscript_ver", "created_at", "updated_at", "resolved_at",
+    "manuscript", "created_at", "updated_at", "resolved_at",
 ]
 
 def db_export_issues(conn: sqlite3.Connection, project_id: int,

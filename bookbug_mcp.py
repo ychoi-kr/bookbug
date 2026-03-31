@@ -132,7 +132,7 @@ def issue_add(
     assignee: str = "",
     reporter: str = "claude",
     suggestion: str = "",
-    manuscript_ver: str = "",
+    manuscript: str = "",
 ) -> dict:
     """새 이슈를 등록한다. issue_key는 자동 생성.
 
@@ -146,6 +146,8 @@ def issue_add(
         - after_desc: 수정 후 설명
         - after: 수정 후 원고 본문 (복사/붙여넣기 대상)
       플레인 텍스트 입력 시 자동으로 summary에 래핑됨.
+    manuscript: 이슈를 발견한 원고 파일명 또는 URL.
+      예) 원고_20260326.docx, CS면접_1부_1교_20260303.docx, https://wikidocs.net/12345
     (resolution은 처리 후 issue_update로 별도 기입)
     """
     if severity not in VALID_SEVERITIES:
@@ -157,7 +159,7 @@ def issue_add(
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
         return db_issue_add(
             conn, p["id"], title, description, category,
-            severity, location, heading_no, assignee, reporter, suggestion, manuscript_ver
+            severity, location, heading_no, assignee, reporter, suggestion, manuscript
         )
 
 
