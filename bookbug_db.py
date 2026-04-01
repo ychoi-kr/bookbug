@@ -406,9 +406,10 @@ def db_issue_update_simple(conn: sqlite3.Connection, issue_id: int,
     return db_issue_update(conn, issue_id, row, updates, changed_by=changed_by)
 
 def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
-                    updates: dict, changed_by: str = "") -> list:
+                    updates: dict, changed_by: str = "", auto_commit: bool = True) -> list:
     """updates dict의 필드만 수정. 변경 이력 기록. 변경된 필드 목록 반환.
-    description 필드는 차단됨 — 수정하려면 db_issue_amend 사용."""
+    description 필드는 차단됨 — 수정하려면 db_issue_amend 사용.
+    auto_commit=False로 호출하면 커밋을 호출자에게 위임한다."""
     if "description" in updates:
         raise ValueError("description 필드는 db_issue_update로 수정할 수 없습니다. db_issue_amend를 사용하세요.")
     for field, new_val in updates.items():
@@ -421,7 +422,8 @@ def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
 
     vals = list(updates.values()) + [issue_id]
     conn.execute(f"UPDATE issues SET {set_clause} WHERE id=?", vals)
-    conn.commit()
+    if auto_commit:
+        conn.commit()
     return list(updates.keys())
 
 # ─── 태그 ─────────────────────────────────────────────────────────────────────

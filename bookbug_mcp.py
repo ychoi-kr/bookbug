@@ -273,22 +273,55 @@ def issue_delete(issue: str, deleted_by: str = "") -> dict:
 # ─── 일괄 처리 ────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def issue_batch_update(issues: str, status: str, changed_by: str = "", project: str = "") -> dict:
-    """여러 이슈의 상태를 한 번에 변경한다. issues: 이슈 키 쉼표 구분. project: 프로젝트 슬러그 (복수 프로젝트 환경에서 필수)."""
-    if status not in VALID_STATUSES:
-        return {"ok": False, "error": f"유효하지 않은 상태: '{status}'. 허용값: {', '.join(VALID_STATUSES)}"}
-    keys = [k.strip() for k in issues.split(",") if k.strip()]
-    updated = 0
-    skipped = []
+def issue_bulk_update(updates: str, changed_by: str = "", project: str = "") -> dict:
+    """여러 이슈를 한 번에 업데이트한다. 1회 트랜잭션으로 처리.
+    updates: JSON 배열. 각 항목에 issue(필수)와 변경할 필드를 지정.
+    예시: [{"issue":"BUG#1","status":"resolved"},{"issue":"BUG#2","severity":"major","assignee":"홍길동"}]
+    허용 필드: title, status, category, severity, location, heading_no, assignee, suggestion, resolution
+    """
+    try:
+        items = _json.loads(updates)
+    except (ValueError, _json.JSONDecodeError):
+        return {"ok": False, "error": "updates는 유효한 JSON 배열이어야 합니다"}
+    if not isinstance(items, list):
+        return {"ok": False, "error": "updates는 JSON 배열이어야 합니다"}
+
+    ALLOWED_FIELDS = {"title", "status", "category", "severity", "location",
+                      "heading_no", "assignee", "suggestion", "resolution"}
+    results = []
     with get_db() as conn:
-        for key in keys:
-            row = db_issue_get(conn, key, project_slug=project)
-            if not row:
-                skipped.append(key)
+        for item in items:
+            issue_ref = item.get("issue")
+            if not issue_ref:
+                results.append({"issue": None, "ok": False, "error": "issue 키 누락"})
                 continue
-            db_issue_update(conn, row["id"], row, {"status": status}, changed_by=changed_by)
-            updated += 1
-    return {"ok": True, "updated": updated, "skipped": skipped, "status": status}
+            row = db_issue_get(conn, str(issue_ref), project_slug=project)
+            if not row:
+                results.append({"issue": issue_ref, "ok": False, "error": "이슈를 찾을 수 없습니다"})
+                continue
+            fields = {k: v for k, v in item.items() if k in ALLOWED_FIELDS}
+            if not fields:
+                results.append({"issue": issue_ref, "ok": False, "error": "변경할 필드 없음"})
+                continue
+            if "status" in fields and fields["status"] not in VALID_STATUSES:
+                results.append({"issue": issue_ref, "ok": False,
+                                "error": f"유효하지 않은 상태: '{fields['status']}'"})
+                continue
+            if "severity" in fields and fields["severity"] not in VALID_SEVERITIES:
+                results.append({"issue": issue_ref, "ok": False,
+                                "error": f"유효하지 않은 심각도: '{fields['severity']}'"})
+                continue
+            if "suggestion" in fields:
+                fields["suggestion"] = _parse_suggestion(fields["suggestion"])
+            updated = db_issue_update(conn, row["id"], row, fields,
+                                      changed_by=changed_by, auto_commit=False)
+            results.append({"issue": issue_ref, "ok": True, "updated_fields": updated})
+        conn.commit()
+
+    succeeded = sum(1 for r in results if r.get("ok"))
+    failed = sum(1 for r in results if not r.get("ok"))
+    return {"ok": True, "total": len(items), "succeeded": succeeded,
+            "failed": failed, "details": results}
 
 # ─── 태그 ─────────────────────────────────────────────────────────────────────
 

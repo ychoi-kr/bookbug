@@ -219,29 +219,48 @@ class TestIssueProjectScoping(unittest.TestCase):
         self.assertEqual(r["title"], "A 이슈 1")
 
 
-class TestBatchUpdate(unittest.TestCase):
+class TestBulkUpdate(unittest.TestCase):
 
     def setUp(self):
         fresh_db()
-        mcp.project_create("batch-proj", "배치 프로젝트")
-        self.k1 = mcp.issue_add("batch-proj", "이슈 1")["issue_key"]
-        self.k2 = mcp.issue_add("batch-proj", "이슈 2")["issue_key"]
-        self.k3 = mcp.issue_add("batch-proj", "이슈 3")["issue_key"]
+        mcp.project_create("bulk-proj", "벌크 프로젝트")
+        self.k1 = mcp.issue_add("bulk-proj", "이슈 1")["issue_key"]
+        self.k2 = mcp.issue_add("bulk-proj", "이슈 2")["issue_key"]
+        self.k3 = mcp.issue_add("bulk-proj", "이슈 3")["issue_key"]
 
-    def test_batch_update_all(self):
-        r = mcp.issue_batch_update(f"{self.k1},{self.k2},{self.k3}", "resolved")
+    def test_bulk_update_different_fields(self):
+        import json
+        updates = json.dumps([
+            {"issue": self.k1, "status": "resolved"},
+            {"issue": self.k2, "severity": "major", "assignee": "홍길동"},
+            {"issue": self.k3, "status": "wontfix", "category": "오탈자"},
+        ])
+        r = mcp.issue_bulk_update(updates, project="bulk-proj")
         self.assertTrue(r["ok"])
-        self.assertEqual(r["updated"], 3)
-        self.assertEqual(r["skipped"], [])
+        self.assertEqual(r["succeeded"], 3)
+        self.assertEqual(r["failed"], 0)
 
-    def test_batch_update_partial_missing(self):
-        r = mcp.issue_batch_update(f"{self.k1},9999,{self.k2}", "in_progress")
+    def test_bulk_update_partial_missing(self):
+        import json
+        updates = json.dumps([
+            {"issue": self.k1, "status": "in_progress"},
+            {"issue": "9999", "status": "resolved"},
+            {"issue": self.k2, "status": "resolved"},
+        ])
+        r = mcp.issue_bulk_update(updates, project="bulk-proj")
         self.assertTrue(r["ok"])
-        self.assertEqual(r["updated"], 2)
-        self.assertIn("9999", r["skipped"])
+        self.assertEqual(r["succeeded"], 2)
+        self.assertEqual(r["failed"], 1)
 
-    def test_batch_update_invalid_status(self):
-        r = mcp.issue_batch_update(self.k1, "bad_status")
+    def test_bulk_update_invalid_status(self):
+        import json
+        updates = json.dumps([{"issue": self.k1, "status": "bad_status"}])
+        r = mcp.issue_bulk_update(updates, project="bulk-proj")
+        self.assertEqual(r["succeeded"], 0)
+        self.assertEqual(r["failed"], 1)
+
+    def test_bulk_update_invalid_json(self):
+        r = mcp.issue_bulk_update("not json")
         self.assertFalse(r["ok"])
 
 
