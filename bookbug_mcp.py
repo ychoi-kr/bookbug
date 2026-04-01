@@ -136,6 +136,7 @@ def issue_add(
 ) -> dict:
     """새 이슈를 등록한다. issue_key는 자동 생성.
 
+    severity 값: critical / major / normal(기본) / minor / trivial
     description: 문제 상황 기술. 원고의 어떤 부분이 왜 문제인지 사실 중심으로 기록.
     suggestion: 교정 의견. JSON 구조로 입력:
       {"summary": "전체 요약", "items": [{"before_desc": "...", "before": "...", "after_desc": "...", "after": "..."}]}
@@ -215,13 +216,8 @@ def issue_update(
     교정 의견은 suggestion(JSON 구조), 처리 내용은 resolution 필드를 사용.
     suggestion 형식: {"summary": "...", "items": [{"before_desc","before","after_desc","after"}]}
 
-    status 값 안내:
-      open        — 확인 대기 중
-      in_progress — 수정 작업 진행 중
-      resolved    — 수정 완료 확인됨
-      wontfix     — 검토했으나 수정하지 않기로 결정 (보고 오류 포함)
-      deferred    — 현재 교에서 보류, 다음 교에서 처리
-      duplicate   — 다른 이슈와 중복
+    status 값: open / in_progress / resolved / wontfix / deferred / duplicate
+    severity 값: critical / major / normal / minor / trivial
     """
     if suggestion is not None:
         suggestion = _parse_suggestion(suggestion)
@@ -278,6 +274,8 @@ def issue_bulk_update(updates: str, changed_by: str = "", project: str = "") -> 
     updates: JSON 배열. 각 항목에 issue(필수)와 변경할 필드를 지정.
     예시: [{"issue":"BUG#1","status":"resolved"},{"issue":"BUG#2","severity":"major","assignee":"홍길동"}]
     허용 필드: title, status, category, severity, location, heading_no, assignee, suggestion, resolution
+    status 값: open / in_progress / resolved / wontfix / deferred / duplicate
+    severity 값: critical / major / normal / minor / trivial
     """
     try:
         items = _json.loads(updates)
