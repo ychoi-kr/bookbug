@@ -247,6 +247,25 @@ def issue_update(
         updated_fields = db_issue_update(conn, row["id"], row, updates, changed_by)
     return {"ok": True, "issue_key": row["issue_key"], "updated_fields": updated_fields}
 
+@mcp.tool()
+def issue_resolve(issue: str, project: str = "", resolution: str = "", resolved_by: str = "") -> dict:
+    """이슈를 resolved 상태로 변경하고 처리 내용을 기록한다."""
+    updates = {"status": "resolved"}
+    if resolution:
+        updates["resolution"] = resolution
+
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        db_issue_update(conn, row["id"], row, updates, changed_by=resolved_by)
+        refreshed = conn.execute("SELECT resolution, resolved_at FROM issues WHERE id=?", (row["id"],)).fetchone()
+
+    return {
+        "ok": True,
+        "issue_key": row["issue_key"],
+        "status": "resolved",
+        "resolution": refreshed["resolution"],
+        "resolved_at": refreshed["resolved_at"],
+    }
 
 @mcp.tool()
 def issue_amend(issue: str, project: str = "", description: str = "", amended_by: str = "") -> dict:
