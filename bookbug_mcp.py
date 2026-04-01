@@ -175,7 +175,17 @@ def issue_list(
     search: str = "",
     sort: str = "default",
 ) -> dict:
-    """프로젝트의 이슈 목록을 필터링하여 반환한다."""
+    """프로젝트의 이슈 목록을 필터링하여 반환한다.
+
+    모든 필터는 선택 사항이며 조합 가능. 미지정 시 전체 반환.
+    status: 쉼표 구분으로 복수 지정 가능 (예: "open,in_progress")
+    severity: 쉼표 구분으로 복수 지정 가능 (예: "critical,major")
+    heading_no: 장 번호로 필터
+    category: 카테고리로 필터
+    assignee: 담당자로 필터
+    search: title, description, suggestion에서 텍스트 검색
+    sort: default / severity / status / updated / created / key_asc / key_desc
+    """
     with get_db() as conn:
         p = db_project_get(conn, project)
         if not p:
@@ -401,7 +411,12 @@ def issue_history(issue: str, project: str = "") -> dict:
 
 @mcp.tool()
 def search_issues(query: str, project: str = "") -> dict:
-    """전체 프로젝트 또는 특정 프로젝트에서 텍스트를 검색한다."""
+    """전체 프로젝트 또는 특정 프로젝트에서 텍스트를 검색한다.
+
+    title, description, suggestion, resolution, location을 대상으로 검색.
+    project 미지정 시 모든 프로젝트에서 검색.
+    특정 프로젝트 내에서 필터 조합이 필요하면 issue_list의 search 파라미터를 사용.
+    """
     term = f"%{query}%"
     sql = (
         "SELECT i.*, p.slug as project_slug FROM issues i "
