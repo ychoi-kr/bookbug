@@ -73,6 +73,21 @@ CREATE TABLE IF NOT EXISTS tags (
     UNIQUE(issue_id, tag)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    email      TEXT UNIQUE,
+    api_key    TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS project_members (
+    project_id INTEGER NOT NULL REFERENCES projects(id),
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    role       TEXT NOT NULL DEFAULT 'member',
+    PRIMARY KEY (project_id, user_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_issues_project  ON issues(project_id);
 CREATE INDEX IF NOT EXISTS idx_issues_status   ON issues(status);
 CREATE INDEX IF NOT EXISTS idx_issues_chapter  ON issues(heading_no);
@@ -80,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_issues_category ON issues(category);
 CREATE INDEX IF NOT EXISTS idx_history_issue   ON issue_history(issue_id);
 CREATE INDEX IF NOT EXISTS idx_tags_issue      ON tags(issue_id);
 CREATE INDEX IF NOT EXISTS idx_tags_tag        ON tags(tag);
+CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
 """
 
 # ─── DB 연결 (Context Manager) ────────────────────────────────────────────────
