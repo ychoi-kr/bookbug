@@ -34,6 +34,7 @@ from bookbug_db import (
     db_comment_add,
     db_comment_list,
     db_pending_actions,
+    db_activity_log,
     db_import_xlsx,
     db_export_issues,
     db_user_by_api_key,
@@ -573,6 +574,35 @@ def pending_actions(project: str, kind: str = "") -> dict:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
         actions = db_pending_actions(conn, p["id"], kind=kind)
     return {"project": project, "count": len(actions), "actions": actions}
+
+# ─── 활동 로그 ───────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def activity_log(
+    project: str = "",
+    since: str = "",
+    until: str = "",
+    user: str = "",
+    team: str = "",
+) -> dict:
+    """프로젝트 활동 로그를 반환한다. 이슈 생성, 필드 변경, 코멘트를 시간순으로 조회.
+
+    모든 파라미터는 선택 사항.
+    project: 프로젝트 slug로 필터
+    since: 시작 날짜/시간 (예: 2026-04-01)
+    until: 종료 날짜/시간 (예: 2026-04-06)
+    user: 사용자명으로 필터 (reporter, changed_by, posted_by)
+    team: 팀명으로 필터
+
+    반환 entries의 action 종류: issue_created, field_changed, comment, approve, reject
+    """
+    with get_db() as conn:
+        if project:
+            p = db_project_get(conn, project)
+            if not p:
+                return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        entries = db_activity_log(conn, project_slug=project, since=since, until=until, user=user, team=team)
+    return {"count": len(entries), "entries": entries}
 
 # ─── 진입점 ───────────────────────────────────────────────────────────────────
 

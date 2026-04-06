@@ -651,6 +651,56 @@ def db_ref_remove(conn, ref_id: int) -> dict:
         return {"ok": True}
     return {"ok": False, "error": "참조를 찾을 수 없습니다"}
 
+# ─── 활동 로그 ───────────────────────────────────────────────────────────────
+
+def db_activity_log(conn: sqlite3.Connection, project_slug: str = "",
+                    since: str = "", until: str = "", user: str = "",
+                    team: str = "") -> list:
+    """이슈 생성, 필드 변경, 코멘트를 통합 조회한다."""
+    union_sql = """
+        SELECT i.created_at AS timestamp, i.reporter AS user,
+               'issue_created' AS action, p.slug AS project,
+               i.issue_key, i.title AS detail
+        FROM issues i JOIN projects p ON i.project_id=p.id
+        WHERE i.deleted_at IS NULL AND p.deleted_at IS NULL
+        UNION ALL
+        SELECT h.changed_at, h.changed_by,
+               'field_changed', p.slug,
+               i.issue_key, h.field || ': ' || COALESCE(h.old_value,'') || ' → ' || COALESCE(h.new_value,'')
+        FROM issue_history h
+        JOIN issues i ON h.issue_id=i.id JOIN projects p ON i.project_id=p.id
+        WHERE i.deleted_at IS NULL AND p.deleted_at IS NULL
+        UNION ALL
+        SELECT c.created_at, c.posted_by,
+               c.kind, p.slug,
+               i.issue_key, c.body
+        FROM issue_comments c
+        JOIN issues i ON c.issue_id=i.id JOIN projects p ON i.project_id=p.id
+        WHERE i.deleted_at IS NULL AND p.deleted_at IS NULL
+    """
+    sql = f"SELECT * FROM ({union_sql})"
+    conditions, params = [], []
+    if project_slug:
+        conditions.append("project = ?")
+        params.append(project_slug)
+    if since:
+        conditions.append("timestamp >= ?")
+        params.append(since)
+    if until:
+        u = until if "T" in until else until + "T23:59:59"
+        conditions.append("timestamp <= ?")
+        params.append(u)
+    if user:
+        conditions.append("user = ?")
+        params.append(user)
+    if team:
+        conditions.append("project IN (SELECT slug FROM projects WHERE team = ? AND deleted_at IS NULL)")
+        params.append(team)
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += " ORDER BY timestamp DESC"
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
 # ─── 소프트 딜리트 ────────────────────────────────────────────────────────────
 
 def db_project_delete(conn: sqlite3.Connection, slug: str) -> dict:
