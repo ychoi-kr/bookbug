@@ -20,6 +20,7 @@ import uvicorn
 
 from bookbug_db import (
     get_db,
+    get_mode,
     db_project_create,
     db_project_list,
     db_project_show,
@@ -30,7 +31,12 @@ from bookbug_db import (
     db_issue_list,
     db_issue_show,
     db_issue_update,
+    db_comment_add,
+    db_comment_list,
+    db_ref_list,
     db_export_issues,
+    db_user_by_api_key,
+    db_user_projects,
     VALID_STATUSES,
     VALID_SEVERITIES,
 )
@@ -53,6 +59,29 @@ def _require_write(request: Request):
     """쓰기 전용 엔드포인트 앞에서 호출. 읽기 전용이면 403."""
     if _readonly(request):
         raise HTTPException(status_code=403, detail="읽기 전용 접근입니다. LAN에서만 수정할 수 있습니다.")
+
+# ─── 팀 모드 세션 ────────────────────────────────────────────────────────────
+
+_sessions: dict = {}  # session_id -> user dict
+
+def _get_session_user(request: Request):
+    """세션에서 로그인된 사용자 반환. 없으면 None."""
+    if get_mode() != "team":
+        return None
+    session_id = request.cookies.get("bb_session", "")
+    return _sessions.get(session_id)
+
+def _require_team_access(request: Request, project_slug: str):
+    """팀 모드에서 프로젝트 접근 권한 확인."""
+    if get_mode() != "team":
+        return
+    user = _get_session_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    with get_db() as conn:
+        projects = db_user_projects(conn, user["id"])
+    if project_slug not in projects:
+        raise HTTPException(status_code=403, detail="프로젝트 접근 권한이 없습니다")
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -146,17 +175,62 @@ def linkify_refs(text, project_slug=""):
     return result
 
 templates.env.filters["linkify_refs"] = linkify_refs
+templates.env.globals["team_mode"] = lambda: get_mode() == "team"
 
 
 # ─── 프로젝트 목록 ─────────────────────────────────────────────────────────────
 
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if get_mode() != "team":
+        return RedirectResponse("/")
+    return templates.TemplateResponse(request, "login.html", {})
+
+@app.post("/login")
+async def login_submit(request: Request, api_key: str = Form("")):
+    if get_mode() != "team":
+        return RedirectResponse("/", status_code=303)
     with get_db() as conn:
-        projects = db_project_list(conn)
+        user = db_user_by_api_key(conn, api_key)
+    if not user:
+        return templates.TemplateResponse(request, "login.html", {"error": "유효하지 않은 API 키입니다"})
+    import secrets
+    session_id = secrets.token_hex(16)
+    _sessions[session_id] = dict(user)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie("bb_session", session_id, httponly=True)
+    return response
+
+@app.get("/logout")
+def logout(request: Request):
+    session_id = request.cookies.get("bb_session", "")
+    _sessions.pop(session_id, None)
+    response = RedirectResponse("/", status_code=303)
+    response.delete_cookie("bb_session")
+    return response
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request, team: str = Query("")):
+    with get_db() as conn:
+        all_projects = db_project_list(conn)
+    all_teams = sorted({p.get("team", "") for p in all_projects if p.get("team", "")})
+    if team:
+        projects = [p for p in all_projects if p.get("team", "") == team]
+    else:
+        projects = all_projects
+    if get_mode() == "team":
+        user = _get_session_user(request)
+        if not user:
+            return RedirectResponse("/login")
+        with get_db() as conn:
+            user_projects = db_user_projects(conn, user["id"])
+        projects = [p for p in projects if p["slug"] in user_projects]
     return templates.TemplateResponse(request, "projects.html", {
         "projects": projects,
+        "all_teams": all_teams,
+        "current_team": team,
         "readonly": _readonly(request),
+        "session_user": _get_session_user(request),
     })
 
 
@@ -174,6 +248,7 @@ def project_view(
     sort:     str = Query("default"),
     page:     int = Query(1),
 ):
+    _require_team_access(request, slug)
     PAGE_SIZE = 50
     # 콤마 구분 → 리스트 (템플릿용)
     status_list   = [s for s in status.split(",")   if s] if status   else []
@@ -214,6 +289,7 @@ def project_view(
             "assignees": all_assignees,
         },
         "readonly": _readonly(request),
+        "session_user": _get_session_user(request),
     })
 
 
@@ -231,6 +307,9 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
         data["project_slug"] = slug
         p = db_project_get(conn, slug)
         data["project_title"] = p["title"] if p else slug
+        data["project_team"] = p["team"] if p else ""
+        comments = db_comment_list(conn, data["id"])
+        refs = db_ref_list(conn, data["id"])
     tags    = data.pop("tags", [])
     history = data.pop("history", [])
 
@@ -265,7 +344,10 @@ def issue_view(request: Request, slug: str, num: str, back: str = ""):
         "SHORT_FIELDS": SHORT_FIELDS,
         "back_url": back_url,
         "suggestion_parsed": suggestion_parsed,
+        "comments": comments,
+        "refs": refs,
         "readonly": _readonly(request),
+        "session_user": _get_session_user(request),
     })
 
 
@@ -282,9 +364,12 @@ def issue_edit_form(request: Request, slug: str, num: str, back: str = ""):
             return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
         issue = dict(row)
         issue["project_slug"] = slug
+        p = db_project_get(conn, slug)
+        issue["project_team"] = p["team"] if p else ""
     return templates.TemplateResponse(request, "issue_edit.html", {
         "issue": issue,
         "back_url": unquote(back) if back else "",
+        "session_user": _get_session_user(request),
     })
 
 
@@ -350,6 +435,43 @@ async def issue_status_update(
             db_issue_update(conn, row["id"], row, {"status": status}, changed_by=changed_by)
     dest = back if back else f"/issue/{slug}/{num}"
     return RedirectResponse(dest, status_code=303)
+
+
+# ─── 코멘트 등록 ──────────────────────────────────────────────────────────────
+
+@app.post("/issue/{slug}/{num}/comment")
+async def issue_comment_submit(
+    request: Request,
+    slug: str,
+    num: str,
+    action: str = Form("comment"),
+    body: str = Form(""),
+    author: str = Form(""),
+    back: str = Form(""),
+):
+    _require_write(request)
+    ref = f"{slug}#{num}"
+    with get_db() as conn:
+        row = db_issue_get(conn, ref)
+        if not row:
+            return HTMLResponse("이슈를 찾을 수 없습니다.", status_code=404)
+        db_comment_add(conn, row["id"], author=author, action=action, body=body)
+    from urllib.parse import quote
+    back_param = f"?back={quote(back)}" if back else ""
+    return RedirectResponse(f"/issue/{slug}/{num}{back_param}", status_code=303)
+
+
+# ─── 이슈 미리보기 (navbar 바로가기용) ─────────────────────────────────────────
+
+@app.get("/api/issue/{slug}/{num}/peek")
+def issue_peek(request: Request, slug: str, num: str):
+    """이슈 번호로 제목·상태만 빠르게 반환."""
+    ref = f"{slug}#{num}"
+    with get_db() as conn:
+        row = db_issue_get(conn, ref)
+    if not row:
+        return JSONResponse({"ok": False}, status_code=404)
+    return JSONResponse({"ok": True, "title": row["title"], "status": row["status"]})
 
 
 # ─── export (JSON) ─────────────────────────────────────────────────────────────
