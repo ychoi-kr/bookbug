@@ -7,7 +7,11 @@
   <div>
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb mb-1">
+        {% if project.team %}
+        <li class="breadcrumb-item"><a href="/?team={{ project.team }}">{{ project.team }}</a></li>
+        {% else %}
         <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
+        {% endif %}
         <li class="breadcrumb-item active">{{ project.title }}</li>
       </ol>
     </nav>
@@ -156,6 +160,9 @@
           <td class="text-muted small font-monospace">#{{ i.issue_key }}</td>
           <td>
             <span>{{ i.title }}</span>
+            {% if i.approve_count %}<span class="text-success ms-1" title="승인 {{ i.approve_count }}건"><i class="bi bi-check-circle-fill"></i></span>{% endif %}
+            {% if i.reject_count %}<span class="text-danger ms-1" title="거부 {{ i.reject_count }}건"><i class="bi bi-x-circle-fill"></i></span>{% endif %}
+            {% if i.comment_count - i.approve_count - i.reject_count > 0 %}<span class="text-muted ms-1" title="코멘트 {{ i.comment_count - i.approve_count - i.reject_count }}건"><i class="bi bi-chat-dots"></i></span>{% endif %}
             {% if i.location %}<div class="text-muted small">{{ i.location }}</div>{% endif %}
           </td>
           <td><span class="badge bg-{{ sl.color }}">{{ sl.text }}</span></td>

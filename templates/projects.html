@@ -6,6 +6,16 @@
   <h4 class="mb-0 me-auto">프로젝트</h4>
 </div>
 
+{% if all_teams %}
+<div class="d-flex gap-2 mb-3 align-items-center">
+  <span class="text-muted small">팀:</span>
+  <a href="/" class="btn btn-sm {% if not current_team %}btn-secondary{% else %}btn-outline-secondary{% endif %}">전체</a>
+  {% for t in all_teams %}
+  <a href="/?team={{ t }}" class="btn btn-sm {% if current_team == t %}btn-secondary{% else %}btn-outline-secondary{% endif %}">{{ t }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if projects %}
 <div class="row g-3">
   {% for p in projects %}

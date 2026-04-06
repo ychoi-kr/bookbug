@@ -509,5 +509,195 @@ class TestIssueKeyGeneration(unittest.TestCase):
         self.assertEqual(a2, "2")
 
 
+class TestProjectTeam(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+
+    def test_project_create_with_team(self):
+        r = mcp.project_create("team-proj", "팀 프로젝트", team="편집1팀")
+        self.assertTrue(r["ok"])
+        projects = mcp.project_list()["projects"]
+        p = [x for x in projects if x["slug"] == "team-proj"][0]
+        self.assertEqual(p["team"], "편집1팀")
+
+    def test_project_list_team_filter(self):
+        mcp.project_create("p1", "프로젝트1", team="A팀")
+        mcp.project_create("p2", "프로젝트2", team="B팀")
+        mcp.project_create("p3", "프로젝트3", team="A팀")
+        r = mcp.project_list(team="A팀")
+        self.assertEqual(len(r["projects"]), 2)
+        slugs = [p["slug"] for p in r["projects"]]
+        self.assertIn("p1", slugs)
+        self.assertIn("p3", slugs)
+
+    def test_project_list_no_team_filter(self):
+        mcp.project_create("p1", "프로젝트1", team="A팀")
+        mcp.project_create("p2", "프로젝트2", team="B팀")
+        mcp.project_create("p3", "프로젝트3")
+        r = mcp.project_list()
+        self.assertEqual(len(r["projects"]), 3)
+
+
+class TestCommentTools(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+        mcp.project_create("comment-proj", "코멘트 프로젝트")
+        self.key = mcp.issue_add("comment-proj", "코멘트 테스트")["issue_key"]
+
+    def test_issue_comment_basic(self):
+        r = mcp.issue_comment(self.key, action="comment", body="테스트 코멘트", author="tester")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["action"], "comment")
+
+    def test_issue_comment_approve(self):
+        r = mcp.issue_comment(self.key, action="approve", body="승인합니다", author="reviewer")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["action"], "approve")
+
+    def test_issue_comment_reject(self):
+        r = mcp.issue_comment(self.key, action="reject", body="거부합니다", author="reviewer")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["action"], "reject")
+
+    def test_issue_comment_invalid_action(self):
+        r = mcp.issue_comment(self.key, action="invalid")
+        self.assertFalse(r["ok"])
+
+    def test_pending_actions(self):
+        mcp.issue_comment(self.key, project="comment-proj", action="approve", body="승인", author="boss")
+        r = mcp.pending_actions("comment-proj")
+        self.assertGreaterEqual(r["count"], 1)
+
+    def test_pending_actions_project_not_found(self):
+        r = mcp.pending_actions("no-proj")
+        self.assertFalse(r["ok"])
+
+
+class TestRefTools(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+        mcp.project_create("ref-proj", "참조 프로젝트")
+        self.key = mcp.issue_add("ref-proj", "참조 테스트")["issue_key"]
+
+    def test_ref_add_commit(self):
+        r = mcp.issue_ref_add(self.key, ref_type="commit", ref_value="abc123", note="버그 수정 커밋")
+        self.assertTrue(r["ok"])
+
+    def test_ref_add_pr(self):
+        r = mcp.issue_ref_add(self.key, ref_type="pr", ref_value="https://github.com/org/repo/pull/42")
+        self.assertTrue(r["ok"])
+
+    def test_ref_add_duplicate(self):
+        mcp.issue_ref_add(self.key, ref_type="commit", ref_value="abc123")
+        r = mcp.issue_ref_add(self.key, ref_type="commit", ref_value="abc123")
+        self.assertFalse(r["ok"])
+
+    def test_ref_list(self):
+        mcp.issue_ref_add(self.key, ref_type="commit", ref_value="abc123")
+        mcp.issue_ref_add(self.key, ref_type="url", ref_value="https://example.com")
+        r = mcp.issue_ref_list(self.key)
+        self.assertEqual(len(r["refs"]), 2)
+
+    def test_ref_remove(self):
+        add_r = mcp.issue_ref_add(self.key, ref_type="commit", ref_value="abc123")
+        r = mcp.issue_ref_remove(add_r["id"])
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(mcp.issue_ref_list(self.key)["refs"]), 0)
+
+    def test_ref_invalid_type(self):
+        r = mcp.issue_ref_add(self.key, ref_type="invalid", ref_value="abc")
+        self.assertFalse(r["ok"])
+
+    def test_ref_empty_value(self):
+        r = mcp.issue_ref_add(self.key, ref_type="commit", ref_value="")
+        self.assertFalse(r["ok"])
+
+
+class TestTeamMode(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+        os.environ["BOOKBUG_MODE"] = "team"
+
+    def tearDown(self):
+        os.environ.pop("BOOKBUG_MODE", None)
+
+    def test_user_create_auto_key(self):
+        r = mcp.user_create("테스터")
+        self.assertTrue(r["ok"])
+        self.assertIn("api_key", r)
+        self.assertEqual(len(r["api_key"]), 32)
+
+    def test_user_create_with_key(self):
+        r = mcp.user_create("테스터", api_key="mykey123")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["api_key"], "mykey123")
+
+    def test_user_create_duplicate_email(self):
+        mcp.user_create("A", email="a@test.com")
+        r = mcp.user_create("B", email="a@test.com")
+        self.assertFalse(r["ok"])
+
+    def test_project_member_add_ok(self):
+        mcp.project_create("team-proj", "팀 프로젝트")
+        user = mcp.user_create("멤버1")
+        r = mcp.project_member_add("team-proj", user["id"])
+        self.assertTrue(r["ok"])
+
+    def test_project_member_add_duplicate(self):
+        mcp.project_create("team-proj", "팀 프로젝트")
+        user = mcp.user_create("멤버1")
+        mcp.project_member_add("team-proj", user["id"])
+        r = mcp.project_member_add("team-proj", user["id"])
+        self.assertFalse(r["ok"])
+        self.assertIn("이미 멤버", r["error"])
+
+    def test_project_member_add_project_not_found(self):
+        user = mcp.user_create("멤버1")
+        r = mcp.project_member_add("no-proj", user["id"])
+        self.assertFalse(r["ok"])
+
+    def test_project_list_filtered_by_api_key(self):
+        mcp.project_create("proj-a", "프로젝트 A")
+        mcp.project_create("proj-b", "프로젝트 B")
+        user = mcp.user_create("멤버1")
+        mcp.project_member_add("proj-a", user["id"])
+        r = mcp.project_list(api_key=user["api_key"])
+        slugs = [p["slug"] for p in r["projects"]]
+        self.assertIn("proj-a", slugs)
+        self.assertNotIn("proj-b", slugs)
+
+    def test_project_list_invalid_api_key(self):
+        mcp.project_create("proj-a", "프로젝트 A")
+        r = mcp.project_list(api_key="invalid-key")
+        self.assertEqual(len(r["projects"]), 0)
+
+    def test_issue_list_team_access_denied(self):
+        mcp.project_create("secret-proj", "비공개 프로젝트")
+        mcp.issue_add("secret-proj", "비밀 이슈")
+        user = mcp.user_create("외부인")
+        r = mcp.issue_list("secret-proj", api_key=user["api_key"])
+        self.assertFalse(r["ok"])
+        self.assertIn("권한", r["error"])
+
+    def test_issue_list_team_access_granted(self):
+        mcp.project_create("team-proj", "팀 프로젝트")
+        mcp.issue_add("team-proj", "팀 이슈")
+        user = mcp.user_create("멤버")
+        mcp.project_member_add("team-proj", user["id"])
+        r = mcp.issue_list("team-proj", api_key=user["api_key"])
+        self.assertEqual(r["count"], 1)
+
+    def test_personal_mode_ignores_api_key(self):
+        os.environ["BOOKBUG_MODE"] = "personal"
+        mcp.project_create("open-proj", "공개 프로젝트")
+        mcp.issue_add("open-proj", "공개 이슈")
+        r = mcp.issue_list("open-proj", api_key="any-key")
+        self.assertEqual(r["count"], 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

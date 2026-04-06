@@ -8,7 +8,11 @@
 {# ── 헤더 ── #}
 <nav aria-label="breadcrumb" class="mb-2">
   <ol class="breadcrumb mb-0">
+    {% if issue.project_team %}
+    <li class="breadcrumb-item"><a href="/?team={{ issue.project_team }}">{{ issue.project_team }}</a></li>
+    {% else %}
     <li class="breadcrumb-item"><a href="/">프로젝트</a></li>
+    {% endif %}
     <li class="breadcrumb-item"><a href="/project/{{ issue.project_slug }}{{ back_url }}">{{ issue.project_title }}</a></li>
     <li class="breadcrumb-item active">#{{ issue.issue_key }}</li>
   </ol>
@@ -110,6 +114,51 @@
       </div>
     </div>
     {% endif %}
+
+    {# ── 코멘트 ── #}
+    <div class="card mb-3">
+      <div class="card-header small fw-bold">코멘트 ({{ comments|length }}건)</div>
+      <div class="card-body">
+        {% if comments %}
+        <div class="d-flex flex-column gap-3 mb-3">
+          {% for c in comments %}
+          <div class="border rounded p-2">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="fw-semibold small">{{ c.author or "익명" }}</span>
+              {% if c.action == "approve" %}
+              <span class="badge bg-success">승인</span>
+              {% elif c.action == "reject" %}
+              <span class="badge bg-danger">거부</span>
+              {% endif %}
+              <span class="text-muted small ms-auto">{{ c.created_at[:16] if c.created_at else "" }}</span>
+            </div>
+            {% if c.body %}
+            <div class="small" style="white-space: pre-wrap;">{{ c.body }}</div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted small mb-3">코멘트가 없습니다.</p>
+        {% endif %}
+
+        {% if not readonly %}
+        <form method="post" action="/issue/{{ issue.project_slug }}/{{ issue.issue_key }}/comment">
+          {% if back_url %}<input type="hidden" name="back" value="{{ back_url }}">{% endif %}
+          <div class="mb-2">
+            <textarea name="body" class="form-control form-control-sm" rows="2" placeholder="코멘트 입력..."></textarea>
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="text" name="author" class="form-control form-control-sm" placeholder="작성자" style="width:120px">
+            <input type="hidden" name="action" value="comment" id="comment-action">
+            <button type="submit" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('comment-action').value='comment'">코멘트</button>
+            <button type="submit" class="btn btn-sm btn-outline-success" onclick="document.getElementById('comment-action').value='approve'">승인</button>
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="document.getElementById('comment-action').value='reject'">거부</button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
 
     {# ── 변경 이력 (접기/펼치기) ── #}
     {% if grouped_history %}
@@ -218,6 +267,38 @@
         <div class="d-flex flex-wrap gap-1">
           {% for t in tags %}
           <span class="badge bg-light text-dark border">{{ t }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if refs %}
+    <div class="card mt-3">
+      <div class="card-body">
+        <div class="field-label mb-2">외부 참조</div>
+        <div class="d-flex flex-column gap-1">
+          {% for r in refs %}
+          <div class="d-flex align-items-center gap-2 small">
+            {% if r.ref_type == "commit" %}
+            <i class="bi bi-git text-muted"></i>
+            {% elif r.ref_type == "pr" %}
+            <i class="bi bi-arrow-left-right text-muted"></i>
+            {% elif r.ref_type == "issue" %}
+            <i class="bi bi-exclamation-circle text-muted"></i>
+            {% else %}
+            <i class="bi bi-link-45deg text-muted"></i>
+            {% endif %}
+            <span class="badge bg-light text-dark">{{ r.ref_type }}</span>
+            {% if r.ref_value.startswith("http") %}
+            <a href="{{ r.ref_value }}" target="_blank" rel="noopener" class="text-break">{{ r.ref_value }}</a>
+            {% else %}
+            <code class="text-break">{{ r.ref_value }}</code>
+            {% endif %}
+            {% if r.note %}
+            <span class="text-muted">{{ r.note }}</span>
+            {% endif %}
+          </div>
           {% endfor %}
         </div>
       </div>

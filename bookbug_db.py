@@ -7,14 +7,19 @@ DB 위치: ~/.bookbug/bookbug.db
 import contextlib
 import csv
 import json
+import os
 import sqlite3
 from pathlib import Path
 
+import yaml
+
 DB_DIR = Path.home() / ".bookbug"
 DB_PATH = DB_DIR / "bookbug.db"
+CONFIG_PATH = DB_DIR / "config.yaml"
 
 VALID_STATUSES = ("open", "in_progress", "resolved", "wontfix", "deferred", "duplicate")
 VALID_SEVERITIES = ("critical", "major", "normal", "minor", "trivial")
+VALID_REF_TYPES = ("commit", "pr", "issue", "url")
 
 # ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +30,7 @@ CREATE TABLE IF NOT EXISTS projects (
     title       TEXT NOT NULL,
     description TEXT DEFAULT '',
     base_path   TEXT DEFAULT '',
+    team        TEXT DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     deleted_at  TEXT DEFAULT NULL
@@ -96,6 +102,27 @@ CREATE INDEX IF NOT EXISTS idx_history_issue   ON issue_history(issue_id);
 CREATE INDEX IF NOT EXISTS idx_tags_issue      ON tags(issue_id);
 CREATE INDEX IF NOT EXISTS idx_tags_tag        ON tags(tag);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
+
+CREATE TABLE IF NOT EXISTS issue_comments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id    INTEGER NOT NULL REFERENCES issues(id),
+    kind        TEXT NOT NULL DEFAULT '',
+    posted_by   TEXT NOT NULL DEFAULT '',
+    body        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_comments_issue ON issue_comments(issue_id);
+
+CREATE TABLE IF NOT EXISTS issue_refs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id   INTEGER NOT NULL REFERENCES issues(id),
+    ref_type   TEXT NOT NULL DEFAULT 'url',
+    ref_value  TEXT NOT NULL,
+    note       TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE(issue_id, ref_type, ref_value)
+);
+CREATE INDEX IF NOT EXISTS idx_refs_issue ON issue_refs(issue_id);
 """
 
 # ─── DB 연결 (Context Manager) ────────────────────────────────────────────────
@@ -117,10 +144,81 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
+    # 기존 DB에 team 컬럼이 없을 수 있으므로 마이그레이션
+    try:
+        conn.execute("ALTER TABLE projects ADD COLUMN team TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # column already exists
     try:
         yield conn
     finally:
         conn.close()
+
+# ─── 설정 / 인증 ─────────────────────────────────────────────────────────────
+
+def load_config() -> dict:
+    """설정 파일 로드. 없으면 기본값 반환."""
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+def get_mode() -> str:
+    """현재 모드 반환. 환경변수 BOOKBUG_MODE > config.yaml > 기본값 'personal'"""
+    mode = os.environ.get("BOOKBUG_MODE", "")
+    if mode:
+        return mode
+    config = load_config()
+    return config.get("mode", "personal")
+
+def db_user_by_api_key(conn, api_key: str):
+    """API 키로 사용자 조회."""
+    if not api_key:
+        return None
+    return conn.execute(
+        "SELECT * FROM users WHERE api_key=?", (api_key,)
+    ).fetchone()
+
+def db_user_projects(conn, user_id: int) -> list:
+    """사용자가 멤버인 프로젝트 slug 목록 반환."""
+    rows = conn.execute(
+        "SELECT p.slug FROM projects p "
+        "JOIN project_members pm ON p.id=pm.project_id "
+        "WHERE pm.user_id=? AND p.deleted_at IS NULL",
+        (user_id,)
+    ).fetchall()
+    return [r["slug"] for r in rows]
+
+def db_user_create(conn, name: str, email: str = "", api_key: str = "") -> dict:
+    """사용자 생성."""
+    import secrets
+    if not api_key:
+        api_key = secrets.token_hex(16)
+    try:
+        conn.execute(
+            "INSERT INTO users(name, email, api_key) VALUES(?,?,?)",
+            (name, email, api_key)
+        )
+        conn.commit()
+        user_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return {"ok": True, "id": user_id, "name": name, "api_key": api_key}
+    except sqlite3.IntegrityError as e:
+        return {"ok": False, "error": str(e)}
+
+def db_project_member_add(conn, project_slug: str, user_id: int, role: str = "member") -> dict:
+    """프로젝트에 멤버 추가."""
+    p = db_project_get(conn, project_slug)
+    if not p:
+        return {"ok": False, "error": f"프로젝트 '{project_slug}'를 찾을 수 없습니다"}
+    try:
+        conn.execute(
+            "INSERT INTO project_members(project_id, user_id, role) VALUES(?,?,?)",
+            (p["id"], user_id, role)
+        )
+        conn.commit()
+        return {"ok": True}
+    except sqlite3.IntegrityError:
+        return {"ok": False, "error": "이미 멤버입니다"}
 
 # ─── 헬퍼 ─────────────────────────────────────────────────────────────────────
 
@@ -148,24 +246,29 @@ def row_to_dict(row: sqlite3.Row) -> dict:
 # ─── 프로젝트 CRUD ────────────────────────────────────────────────────────────
 
 def db_project_create(conn: sqlite3.Connection, slug: str, title: str,
-                      description: str = "", base_path: str = "") -> dict:
+                      description: str = "", base_path: str = "",
+                      team: str = "") -> dict:
     try:
         conn.execute(
-            "INSERT INTO projects(slug, title, description, base_path) VALUES(?,?,?,?)",
-            (slug, title, description, base_path)
+            "INSERT INTO projects(slug, title, description, base_path, team) VALUES(?,?,?,?,?)",
+            (slug, title, description, base_path, team)
         )
         conn.commit()
         return {"ok": True, "slug": slug, "title": title}
     except sqlite3.IntegrityError:
         return {"ok": False, "error": f"슬러그 '{slug}'는 이미 존재합니다"}
 
-def db_project_list(conn: sqlite3.Connection) -> list:
+def db_project_list(conn: sqlite3.Connection, team: str = "") -> list:
     # 프로젝트 목록 + 상태별 카운트를 쿼리 2번으로 처리 (N+1 방지)
-    rows = conn.execute(
-        "SELECT p.*, COUNT(i.id) as issue_count FROM projects p "
-        "LEFT JOIN issues i ON p.id=i.project_id AND i.deleted_at IS NULL "
-        "WHERE p.deleted_at IS NULL GROUP BY p.id ORDER BY p.updated_at DESC"
-    ).fetchall()
+    query = ("SELECT p.*, COUNT(i.id) as issue_count FROM projects p "
+             "LEFT JOIN issues i ON p.id=i.project_id AND i.deleted_at IS NULL "
+             "WHERE p.deleted_at IS NULL")
+    params = []
+    if team:
+        query += " AND p.team=?"
+        params.append(team)
+    query += " GROUP BY p.id ORDER BY p.updated_at DESC"
+    rows = conn.execute(query, params).fetchall()
     if not rows:
         return []
 
@@ -188,6 +291,7 @@ def db_project_list(conn: sqlite3.Connection) -> list:
             "title": r["title"],
             "description": r["description"],
             "base_path": r["base_path"],
+            "team": r["team"],
             "created_at": r["created_at"],
             "issue_count": r["issue_count"],
             "by_status": by_status_map.get(r["id"], {}),
@@ -213,6 +317,7 @@ def db_project_show(conn: sqlite3.Connection, slug: str):
         "title": p["title"],
         "description": p["description"],
         "base_path": p["base_path"],
+        "team": p["team"],
         "created_at": p["created_at"],
         "updated_at": p["updated_at"],
         "status_summary": {r["status"]: r["cnt"] for r in stats_rows},
@@ -306,7 +411,11 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
                   status: str = "", heading_no: str = "", category: str = "",
                   assignee: str = "", severity: str = "", search: str = "",
                   sort: str = "default") -> list:
-    query = "SELECT * FROM issues WHERE project_id=? AND deleted_at IS NULL"
+    query = ("SELECT *, "
+             "(SELECT COUNT(*) FROM issue_comments WHERE issue_id=issues.id) AS comment_count, "
+             "(SELECT COUNT(*) FROM issue_comments WHERE issue_id=issues.id AND kind='approve') AS approve_count, "
+             "(SELECT COUNT(*) FROM issue_comments WHERE issue_id=issues.id AND kind='reject') AS reject_count "
+             "FROM issues WHERE project_id=? AND deleted_at IS NULL")
     params = [project_id]
 
     if status:
@@ -362,6 +471,9 @@ def db_issue_list(conn: sqlite3.Connection, project_id: int,
             "assignee": r["assignee"],
             "location": r["location"],
             "created_at": r["created_at"],
+            "comment_count": r["comment_count"],
+            "approve_count": r["approve_count"],
+            "reject_count": r["reject_count"],
         }
         for r in rows
     ]
@@ -461,6 +573,83 @@ def db_tag_list(conn: sqlite3.Connection, issue_id: int) -> list:
     return [r["tag"] for r in conn.execute(
         "SELECT tag FROM tags WHERE issue_id=? ORDER BY tag", (issue_id,)
     )]
+
+# ─── 코멘트 ─────────────────────────────────────────────────────────────────────
+
+def db_comment_add(conn, issue_id: int, author: str = "", action: str = "comment", body: str = "") -> dict:
+    """코멘트/승인/거부를 등록한다."""
+    if action not in ("comment", "approve", "reject"):
+        raise ValueError(f"invalid action {action!r}. allowed: comment, approve, reject")
+    conn.execute(
+        "INSERT INTO issue_comments(issue_id, posted_by, kind, body) VALUES(?,?,?,?)",
+        (issue_id, author, action, body)
+    )
+    conn.commit()
+    comment_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {"ok": True, "id": comment_id, "action": action}
+
+def db_comment_list(conn, issue_id: int) -> list:
+    """이슈의 코멘트 목록을 반환한다."""
+    rows = conn.execute(
+        "SELECT id, issue_id, kind AS action, posted_by AS author, body, created_at "
+        "FROM issue_comments WHERE issue_id=? ORDER BY created_at",
+        (issue_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+def db_pending_actions(conn, project_id: int, kind: str = "") -> list:
+    """프로젝트의 코멘트를 조회한다.
+    kind 미지정 시 전체, 지정 시 해당 종류만 반환.
+    kind: comment / approve / reject (쉼표 구분 복수 가능)"""
+    query = (
+        "SELECT c.id, c.issue_id, c.kind AS action, c.posted_by AS author, "
+        "c.body, c.created_at, i.issue_key, i.title AS issue_title, i.status "
+        "FROM issue_comments c "
+        "JOIN issues i ON c.issue_id=i.id "
+        "WHERE i.project_id=? AND i.deleted_at IS NULL"
+    )
+    params = [project_id]
+    if kind:
+        kinds = [k.strip() for k in kind.split(",")]
+        placeholders = ",".join(["?"] * len(kinds))
+        query += f" AND c.kind IN ({placeholders})"
+        params.extend(kinds)
+    query += " ORDER BY c.created_at DESC"
+    rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+# ─── 외부 참조 ───────────────────────────────────────────────────────────────
+
+def db_ref_add(conn, issue_id: int, ref_type: str, ref_value: str, note: str = "") -> dict:
+    """이슈에 외부 참조를 추가한다."""
+    if ref_type not in VALID_REF_TYPES:
+        raise ValueError(f"invalid ref_type {ref_type!r}. allowed: {', '.join(VALID_REF_TYPES)}")
+    try:
+        conn.execute(
+            "INSERT INTO issue_refs(issue_id, ref_type, ref_value, note) VALUES(?,?,?,?)",
+            (issue_id, ref_type, ref_value, note)
+        )
+        conn.commit()
+        ref_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        return {"ok": True, "id": ref_id}
+    except sqlite3.IntegrityError:
+        return {"ok": False, "error": "동일한 참조가 이미 존재합니다"}
+
+def db_ref_list(conn, issue_id: int) -> list:
+    """이슈의 외부 참조 목록을 반환한다."""
+    rows = conn.execute(
+        "SELECT * FROM issue_refs WHERE issue_id=? ORDER BY created_at",
+        (issue_id,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+def db_ref_remove(conn, ref_id: int) -> dict:
+    """외부 참조를 삭제한다."""
+    deleted = conn.execute("DELETE FROM issue_refs WHERE id=?", (ref_id,)).rowcount
+    conn.commit()
+    if deleted:
+        return {"ok": True}
+    return {"ok": False, "error": "참조를 찾을 수 없습니다"}
 
 # ─── 소프트 딜리트 ────────────────────────────────────────────────────────────
 

@@ -11,6 +11,7 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from bookbug_db import (
     get_db,
+    get_mode,
     db_project_create,
     db_project_list,
     db_project_show,
@@ -27,10 +28,21 @@ from bookbug_db import (
     db_tag_add,
     db_tag_remove,
     db_tag_list,
+    db_ref_add,
+    db_ref_list,
+    db_ref_remove,
+    db_comment_add,
+    db_comment_list,
+    db_pending_actions,
     db_import_xlsx,
     db_export_issues,
+    db_user_by_api_key,
+    db_user_projects,
+    db_user_create,
+    db_project_member_add,
     VALID_STATUSES,
     VALID_SEVERITIES,
+    VALID_REF_TYPES,
 )
 
 def _parse_suggestion(value: str) -> str:
@@ -55,6 +67,19 @@ mcp = FastMCP(
     instructions="출판 원고 교정용 이슈 트래커",
 )
 
+
+
+def _check_team_access(conn, api_key: str, project_slug: str) -> bool:
+    """팀 모드에서 API 키 사용자가 프로젝트에 접근 가능한지 확인."""
+    if get_mode() != "team":
+        return True
+    if not api_key:
+        return False
+    user = db_user_by_api_key(conn, api_key)
+    if not user:
+        return False
+    projects = db_user_projects(conn, user["id"])
+    return project_slug in projects
 
 
 def _resolve_issue(conn, issue: str, project: str = ""):
@@ -89,17 +114,28 @@ def _resolve_issue(conn, issue: str, project: str = ""):
 # ─── 프로젝트 관리 ─────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def project_create(slug: str, title: str, description: str = "", base_path: str = "") -> dict:
-    """프로젝트를 생성한다."""
+def project_create(slug: str, title: str, description: str = "", base_path: str = "",
+                   team: str = "") -> dict:
+    """프로젝트를 생성한다. team으로 팀별 그룹화 가능."""
     with get_db() as conn:
-        return db_project_create(conn, slug, title, description, base_path)
+        return db_project_create(conn, slug, title, description, base_path, team)
 
 
 @mcp.tool()
-def project_list() -> dict:
-    """전체 프로젝트 목록과 이슈 수 요약을 반환한다."""
+def project_list(team: str = "", api_key: str = "") -> dict:
+    """전체 프로젝트 목록과 이슈 수 요약을 반환한다.
+    team 지정 시 해당 팀 프로젝트만 반환.
+    팀 모드에서 api_key를 지정하면 해당 사용자가 멤버인 프로젝트만 반환."""
     with get_db() as conn:
-        return {"projects": db_project_list(conn)}
+        projects = db_project_list(conn, team=team)
+        if get_mode() == "team" and api_key:
+            user = db_user_by_api_key(conn, api_key)
+            if user:
+                user_slugs = db_user_projects(conn, user["id"])
+                projects = [p for p in projects if p["slug"] in user_slugs]
+            else:
+                projects = []
+        return {"projects": projects}
 
 
 @mcp.tool()
@@ -117,6 +153,20 @@ def project_delete(slug: str) -> dict:
     """프로젝트를 소프트 딜리트한다. 데이터는 보존되며 목록에서만 숨겨진다."""
     with get_db() as conn:
         return db_project_delete(conn, slug)
+
+# ─── 사용자 / 멤버 관리 ───────────────────────────────────────────────────────
+
+@mcp.tool()
+def user_create(name: str, email: str = "", api_key: str = "") -> dict:
+    """사용자를 생성한다. api_key 미지정 시 자동 생성."""
+    with get_db() as conn:
+        return db_user_create(conn, name, email, api_key)
+
+@mcp.tool()
+def project_member_add(project: str, user_id: int, role: str = "member") -> dict:
+    """프로젝트에 멤버를 추가한다."""
+    with get_db() as conn:
+        return db_project_member_add(conn, project, user_id, role)
 
 # ─── 이슈 CRUD ────────────────────────────────────────────────────────────────
 
@@ -174,6 +224,7 @@ def issue_list(
     severity: str = "",
     search: str = "",
     sort: str = "default",
+    api_key: str = "",
 ) -> dict:
     """프로젝트의 이슈 목록을 필터링하여 반환한다.
 
@@ -185,8 +236,11 @@ def issue_list(
     assignee: 담당자로 필터
     search: title, description, suggestion에서 텍스트 검색
     sort: default / severity / status / updated / created / key_asc / key_desc
+    팀 모드에서 api_key를 지정하면 프로젝트 접근 권한을 확인한다.
     """
     with get_db() as conn:
+        if not _check_team_access(conn, api_key, project):
+            return {"ok": False, "error": "프로젝트 접근 권한이 없습니다"}
         p = db_project_get(conn, project)
         if not p:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
@@ -353,6 +407,40 @@ def issue_tag(issue: str, action: str, tags: str = "") -> dict:
         current_tags = db_tag_list(conn, row["id"])
     return {"issue_key": row["issue_key"], "tags": current_tags}
 
+# ─── 외부 참조 ───────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def issue_ref_add(issue: str, project: str = "", ref_type: str = "url", ref_value: str = "", note: str = "") -> dict:
+    """이슈에 외부 참조(커밋, PR, 이슈, URL)를 추가한다.
+
+    ref_type: commit / pr / issue / url
+    ref_value: 참조 값 (커밋 해시, PR URL, 이슈 번호, URL 등)
+    note: 참조에 대한 설명
+    """
+    if ref_type not in VALID_REF_TYPES:
+        return {"ok": False, "error": f"유효하지 않은 ref_type: '{ref_type}'. 허용값: {', '.join(VALID_REF_TYPES)}"}
+    if not ref_value:
+        return {"ok": False, "error": "ref_value를 입력해 주세요"}
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        result = db_ref_add(conn, row["id"], ref_type, ref_value, note)
+        result["issue_key"] = row["issue_key"]
+    return result
+
+@mcp.tool()
+def issue_ref_list(issue: str, project: str = "") -> dict:
+    """이슈의 외부 참조 목록을 반환한다."""
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        refs = db_ref_list(conn, row["id"])
+    return {"issue_key": row["issue_key"], "refs": refs}
+
+@mcp.tool()
+def issue_ref_remove(ref_id: int) -> dict:
+    """외부 참조를 삭제한다."""
+    with get_db() as conn:
+        return db_ref_remove(conn, ref_id)
+
 # ─── 임포트/익스포트 ──────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -447,6 +535,44 @@ def search_issues(query: str, project: str = "") -> dict:
     ]
     return {"query": query, "count": len(results), "results": results}
 
+
+# ─── 코멘트/승인/거부 ────────────────────────────────────────────────────────
+
+@mcp.tool()
+def issue_comment(issue: str, project: str = "", action: str = "comment", body: str = "", author: str = "") -> dict:
+    """이슈에 코멘트/승인/거부를 등록한다.
+
+    action: comment(일반 코멘트) / approve(승인) / reject(거부)
+    body: 코멘트 내용
+    author: 작성자
+    등록된 코멘트는 pending_actions 도구로 조회할 수 있다.
+    """
+    if action not in ("comment", "approve", "reject"):
+        return {"ok": False, "error": f"유효하지 않은 action: '{action}'. 허용값: comment, approve, reject"}
+    with get_db() as conn:
+        row = _resolve_issue(conn, issue, project)
+        result = db_comment_add(conn, row["id"], author=author, action=action, body=body)
+        result["issue_key"] = row["issue_key"]
+    return result
+
+@mcp.tool()
+def pending_actions(project: str, kind: str = "") -> dict:
+    """사람이 웹 UI에서 남긴 코멘트/승인/거부 지시를 조회한다.
+
+    에이전트는 이 도구를 먼저 호출하여 처리할 작업이 있는지 확인해야 한다.
+    "승인된 이슈", "거부된 이슈", "코멘트 달린 이슈"를 찾으려면 이 도구를 사용.
+    issue_list의 status 필터와는 다름 — 이 도구는 사람의 피드백(코멘트)을 조회한다.
+
+    kind 미지정 시 전체 반환. 쉼표 구분으로 복수 지정 가능.
+    kind: comment / approve / reject
+    반환 항목: issue_key, issue_title, action, author, body, created_at, status
+    """
+    with get_db() as conn:
+        p = db_project_get(conn, project)
+        if not p:
+            return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
+        actions = db_pending_actions(conn, p["id"], kind=kind)
+    return {"project": project, "count": len(actions), "actions": actions}
 
 # ─── 진입점 ───────────────────────────────────────────────────────────────────
 
