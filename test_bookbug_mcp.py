@@ -110,7 +110,7 @@ class TestIssueTools(unittest.TestCase):
     def test_issue_list_status_filter(self):
         mcp.issue_add("test-book", "오픈 이슈")
         k2 = mcp.issue_add("test-book", "해결 이슈")["issue_key"]
-        mcp.issue_resolve(k2)
+        mcp.issue_update(k2, status="resolved")
         r = mcp.issue_list("test-book", status="open")
         self.assertEqual(r["count"], 1)
 
@@ -169,9 +169,8 @@ class TestIssueTools(unittest.TestCase):
 
     def test_issue_resolve(self):
         k = mcp.issue_add("test-book", "해결 테스트")["issue_key"]
-        res = mcp.issue_resolve(k, resolution="수정 완료", resolved_by="editor")
+        res = mcp.issue_update(k, status="resolved", resolution="수정 완료", changed_by="editor")
         self.assertTrue(res["ok"])
-        self.assertEqual(res["status"], "resolved")
         detail = mcp.issue_show(k)
         self.assertEqual(detail["status"], "resolved")
         self.assertEqual(detail["resolution"], "수정 완료")
@@ -180,7 +179,7 @@ class TestIssueTools(unittest.TestCase):
     def test_issue_resolve_not_found(self):
         from fastmcp.exceptions import ToolError
         with self.assertRaises(ToolError):
-            mcp.issue_resolve("9999")
+            mcp.issue_update("9999", status="resolved")
 
 
 class TestIssueProjectScoping(unittest.TestCase):
@@ -209,7 +208,7 @@ class TestIssueProjectScoping(unittest.TestCase):
         self.assertEqual(mcp.issue_show("1", project="proj-a")["status"], "open")
 
     def test_issue_resolve_with_project(self):
-        r = mcp.issue_resolve("1", project="proj-a", resolution="A만 해결")
+        r = mcp.issue_update("1", project="proj-a", status="resolved", resolution="A만 해결")
         self.assertTrue(r["ok"])
         self.assertEqual(mcp.issue_show("1", project="proj-a")["status"], "resolved")
         self.assertEqual(mcp.issue_show("1", project="proj-b")["status"], "open")
@@ -310,7 +309,7 @@ class TestStatsAndHistory(unittest.TestCase):
         k1 = mcp.issue_add("stats-proj", "이슈 1", category="맞춤법", severity="major", heading_no="1")["issue_key"]
         mcp.issue_add("stats-proj", "이슈 2", category="번역투", severity="normal", heading_no="1")
         mcp.issue_add("stats-proj", "이슈 3", category="맞춤법", severity="minor", heading_no="2")
-        mcp.issue_resolve(k1)
+        mcp.issue_update(k1, status="resolved")
 
     def test_project_stats(self):
         r = mcp.project_stats("stats-proj")
@@ -325,7 +324,7 @@ class TestStatsAndHistory(unittest.TestCase):
     def test_issue_history_tool(self):
         k = mcp.issue_add("stats-proj", "이력 이슈")["issue_key"]
         mcp.issue_update(k, status="in_progress", changed_by="tester")
-        mcp.issue_resolve(k, resolved_by="editor")
+        mcp.issue_update(k, status="resolved", changed_by="editor")
         r = mcp.issue_history(k)
         self.assertEqual(r["issue_key"], k)
         self.assertGreaterEqual(len(r["history"]), 2)
@@ -397,7 +396,7 @@ class TestImportExport(unittest.TestCase):
     def test_export_status_filter(self):
         mcp.issue_add("imp-proj", "오픈 이슈")
         k2 = mcp.issue_add("imp-proj", "해결 이슈")["issue_key"]
-        mcp.issue_resolve(k2)
+        mcp.issue_update(k2, status="resolved")
         out = os.path.join(self.tmp_dir, "open_only.json")
         r = mcp.export_issues("imp-proj", out, status="open")
         self.assertTrue(r["ok"])
@@ -697,6 +696,68 @@ class TestTeamMode(unittest.TestCase):
         mcp.issue_add("open-proj", "공개 이슈")
         r = mcp.issue_list("open-proj", api_key="any-key")
         self.assertEqual(r["count"], 1)
+
+
+class TestActivityLog(unittest.TestCase):
+
+    def setUp(self):
+        fresh_db()
+        mcp.project_create("log-proj", "로그 프로젝트")
+        self.key = mcp.issue_add("log-proj", "테스트 이슈", reporter="alice")["issue_key"]
+
+    def test_issue_created(self):
+        r = mcp.activity_log(project="log-proj")
+        actions = [e["action"] for e in r["entries"]]
+        self.assertIn("issue_created", actions)
+
+    def test_field_changed(self):
+        mcp.issue_update(self.key, project="log-proj", status="resolved", changed_by="bob")
+        r = mcp.activity_log(project="log-proj")
+        changed = [e for e in r["entries"] if e["action"] == "field_changed"]
+        self.assertTrue(any("status" in e["detail"] for e in changed))
+
+    def test_comment(self):
+        mcp.issue_comment(self.key, project="log-proj", action="comment", body="테스트", author="carol")
+        r = mcp.activity_log(project="log-proj")
+        actions = [e["action"] for e in r["entries"]]
+        self.assertIn("comment", actions)
+
+    def test_user_filter(self):
+        mcp.issue_update(self.key, project="log-proj", status="resolved", changed_by="bob")
+        r = mcp.activity_log(user="bob")
+        self.assertTrue(all(e["user"] == "bob" for e in r["entries"]))
+
+    def test_date_filter_future(self):
+        r = mcp.activity_log(since="2099-01-01")
+        self.assertEqual(r["count"], 0)
+
+    def test_date_filter_past(self):
+        r = mcp.activity_log(until="2000-01-01")
+        self.assertEqual(r["count"], 0)
+
+    def test_no_filters(self):
+        r = mcp.activity_log()
+        self.assertGreaterEqual(r["count"], 1)
+
+    def test_project_not_found(self):
+        r = mcp.activity_log(project="nonexistent")
+        self.assertFalse(r["ok"])
+
+    def test_ordering_desc(self):
+        mcp.issue_update(self.key, project="log-proj", status="resolved", changed_by="bob")
+        r = mcp.activity_log(project="log-proj")
+        if len(r["entries"]) >= 2:
+            self.assertGreaterEqual(r["entries"][0]["timestamp"], r["entries"][1]["timestamp"])
+
+    def test_team_filter(self):
+        mcp.project_create("team-a", "팀A 프로젝트", team="A팀")
+        mcp.issue_add("team-a", "팀A 이슈", reporter="dave")
+        mcp.project_create("team-b", "팀B 프로젝트", team="B팀")
+        mcp.issue_add("team-b", "팀B 이슈", reporter="eve")
+        r = mcp.activity_log(team="A팀")
+        projects = {e["project"] for e in r["entries"]}
+        self.assertIn("team-a", projects)
+        self.assertNotIn("team-b", projects)
 
 
 if __name__ == "__main__":
