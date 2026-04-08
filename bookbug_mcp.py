@@ -46,6 +46,46 @@ from bookbug_db import (
     VALID_REF_TYPES,
 )
 
+_LEAK_MARKERS = (
+    "</parameter>",
+    "</description>",
+    "</invoke>",
+    "</function_calls>",
+    '<parameter name="',
+    "<parameter name='",
+    "<invoke name=",
+)
+
+
+def _detect_markup_leak(description: str, suggestion: str = "") -> str:
+    """description에 tool-call 마크업 잔해가 섞여 있는지 검사.
+    문제 있으면 에러 메시지 문자열, 없으면 빈 문자열 반환.
+    """
+    if not description:
+        return ""
+    for marker in _LEAK_MARKERS:
+        if marker in description:
+            return (
+                f"description에 tool-call 마크업 잔해('{marker}')가 포함되어 있습니다. "
+                "파라미터 닫기 태그를 잘못 쓴 것은 아닌지 확인하고, "
+                "description에는 순수 텍스트만 넣어 다시 호출해 주세요."
+            )
+    if not suggestion and ('"summary"' in description and '"items"' in description):
+        return (
+            "description이 suggestion JSON 구조({\"summary\":..., \"items\":...})를 포함하고 "
+            "suggestion은 비어 있습니다. suggestion 페이로드가 description에 잘못 섞인 것 같습니다. "
+            "두 필드를 분리해 다시 호출해 주세요."
+        )
+    return ""
+
+
+def _field_preview(value: str, n: int = 80) -> str:
+    if not value:
+        return ""
+    s = value if len(value) <= n else value[:n] + "…"
+    return s
+
+
 def _parse_suggestion(value: str) -> str:
     """suggestion 입력값을 JSON 구조로 정규화.
     이미 유효한 JSON이면 그대로, 플레인 텍스트면 summary로 래핑.
@@ -204,15 +244,25 @@ def issue_add(
     """
     if severity not in VALID_SEVERITIES:
         return {"ok": False, "error": f"유효하지 않은 심각도: '{severity}'. 허용값: {', '.join(VALID_SEVERITIES)}"}
+    leak = _detect_markup_leak(description, suggestion)
+    if leak:
+        return {"ok": False, "error": leak}
     suggestion = _parse_suggestion(suggestion)
     with get_db() as conn:
         p = db_project_get(conn, project)
         if not p:
             return {"ok": False, "error": f"프로젝트 '{project}'를 찾을 수 없습니다"}
-        return db_issue_add(
+        result = db_issue_add(
             conn, p["id"], title, description, category,
             severity, location, heading_no, assignee, reporter, suggestion, manuscript
         )
+    if result.get("ok"):
+        result["echo"] = {
+            "title": _field_preview(title),
+            "description": _field_preview(description),
+            "suggestion": _field_preview(suggestion),
+        }
+    return result
 
 
 @mcp.tool()
@@ -318,6 +368,9 @@ def issue_amend(issue: str, project: str = "", description: str = "", amended_by
     """
     if not description:
         raise ToolError("정정할 내용(description)을 입력해 주세요")
+    leak = _detect_markup_leak(description)
+    if leak:
+        return {"ok": False, "error": leak}
     with get_db() as conn:
         row = _resolve_issue(conn, issue, project)
         db_issue_amend(conn, row["id"], row, description, changed_by=amended_by)

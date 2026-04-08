@@ -101,6 +101,38 @@ class TestIssueTools(unittest.TestCase):
         self.assertEqual(detail["severity"], "major")
         self.assertEqual(detail["heading_no"], "1")
 
+    def test_issue_add_rejects_markup_leak(self):
+        bad = (
+            "1장 도입부 문제.\n\n1. 주술 호응 오류: ...</description>\n"
+            '<parameter name="suggestion">{"summary": "...", "items": []}'
+        )
+        r = mcp.issue_add("test-book", "마크업 누수", description=bad)
+        self.assertFalse(r["ok"])
+        self.assertIn("마크업", r["error"])
+        self.assertEqual(mcp.issue_list("test-book")["count"], 0)
+
+    def test_issue_add_detects_suggestion_in_description(self):
+        bad_desc = '문제 설명\n{"summary": "교정 의견", "items": [{"before": "x"}]}'
+        r = mcp.issue_add("test-book", "구조 누수", description=bad_desc)
+        self.assertFalse(r["ok"])
+        self.assertIn("suggestion", r["error"])
+
+    def test_issue_add_echo_on_success(self):
+        r = mcp.issue_add("test-book", "에코 테스트", description="짧은 설명",
+                          suggestion="간단 제안")
+        self.assertTrue(r["ok"])
+        self.assertIn("echo", r)
+        self.assertEqual(r["echo"]["title"], "에코 테스트")
+        self.assertEqual(r["echo"]["description"], "짧은 설명")
+        self.assertIn("간단 제안", r["echo"]["suggestion"])
+
+    def test_issue_amend_rejects_markup_leak(self):
+        k = mcp.issue_add("test-book", "정정 대상")["issue_key"]
+        bad = "수정된 본문</description><parameter name=\"suggestion\">..."
+        r = mcp.issue_amend(k, description=bad)
+        self.assertFalse(r["ok"])
+        self.assertIn("마크업", r["error"])
+
     def test_issue_list_all(self):
         mcp.issue_add("test-book", "이슈 A")
         mcp.issue_add("test-book", "이슈 B")
