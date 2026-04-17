@@ -57,20 +57,24 @@ _LEAK_MARKERS = (
 )
 
 
-def _detect_markup_leak(description: str, suggestion: str = "") -> str:
-    """description에 tool-call 마크업 잔해가 섞여 있는지 검사.
+def _detect_markup_leak(description: str = "", suggestion: str = "",
+                        resolution: str = "") -> str:
+    """텍스트 필드에 tool-call 마크업 잔해가 섞여 있는지 검사.
     문제 있으면 에러 메시지 문자열, 없으면 빈 문자열 반환.
     """
-    if not description:
-        return ""
-    for marker in _LEAK_MARKERS:
-        if marker in description:
-            return (
-                f"description에 tool-call 마크업 잔해('{marker}')가 포함되어 있습니다. "
-                "파라미터 닫기 태그를 잘못 쓴 것은 아닌지 확인하고, "
-                "description에는 순수 텍스트만 넣어 다시 호출해 주세요."
-            )
-    if not suggestion and ('"summary"' in description and '"items"' in description):
+    for field_name, value in [("description", description),
+                               ("suggestion", suggestion),
+                               ("resolution", resolution)]:
+        if not value:
+            continue
+        for marker in _LEAK_MARKERS:
+            if marker in value:
+                return (
+                    f"{field_name}에 tool-call 마크업 잔해('{marker}')가 포함되어 있습니다. "
+                    "파라미터 닫기 태그를 잘못 쓴 것은 아닌지 확인하고, "
+                    f"{field_name}에는 순수 텍스트만 넣어 다시 호출해 주세요."
+                )
+    if not suggestion and description and ('"summary"' in description and '"items"' in description):
         return (
             "description이 suggestion JSON 구조({\"summary\":..., \"items\":...})를 포함하고 "
             "suggestion은 비어 있습니다. suggestion 페이로드가 description에 잘못 섞인 것 같습니다. "
@@ -348,6 +352,12 @@ def issue_update(
 
     if not updates:
         return {"ok": False, "error": "변경할 항목을 하나 이상 지정해 주세요"}
+    leak = _detect_markup_leak(
+        suggestion=updates.get("suggestion", ""),
+        resolution=updates.get("resolution", ""),
+    )
+    if leak:
+        return {"ok": False, "error": leak}
     if "status" in updates and updates["status"] not in VALID_STATUSES:
         return {"ok": False, "error": f"유효하지 않은 상태: '{updates['status']}'. 허용값: {', '.join(VALID_STATUSES)}"}
     if "severity" in updates and updates["severity"] not in VALID_SEVERITIES:
