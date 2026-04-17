@@ -531,7 +531,9 @@ def db_issue_update_simple(conn: sqlite3.Connection, issue_id: int,
     ).fetchone()
     if row is None:
         raise ValueError(f"issue id={issue_id}를 찾을 수 없습니다")
-    return db_issue_update(conn, issue_id, row, updates, changed_by=changed_by)
+    cols = [c[1] for c in conn.execute("PRAGMA table_info(issues)").fetchall()]
+    current_row = dict(zip(cols, row))
+    return db_issue_update(conn, issue_id, current_row, updates, changed_by=changed_by)
 
 def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
                     updates: dict, changed_by: str = "", auto_commit: bool = True) -> list:
