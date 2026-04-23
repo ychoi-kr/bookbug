@@ -670,4 +670,4 @@ def activity_log(
 # ─── 진입점 ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8419)
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8419, stateless_http=True)
