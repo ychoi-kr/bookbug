@@ -63,7 +63,7 @@
             {% if item.before %}
             <div class="mb-2">
               <div class="field-label small mb-1">수정 전</div>
-              <pre class="bg-danger-subtle text-danger-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{{ item.before }}</pre>
+              <pre class="bg-danger-subtle text-danger-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{% if item.before_html %}{{ item.before_html }}{% else %}{{ item.before }}{% endif %}</pre>
             </div>
             {% endif %}
             {% if item.after_desc %}
@@ -76,7 +76,7 @@
                 <button class="btn btn-outline-secondary btn-sm py-0 px-1 copy-btn" style="font-size:.7rem" title="복사"
                   data-copy="{{ item.after }}"><i class="bi bi-clipboard"></i></button>
               </div>
-              <pre class="bg-success-subtle text-success-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{{ item.after }}</pre>
+              <pre class="bg-success-subtle text-success-emphasis rounded px-2 py-1 small mb-0" style="white-space: pre-wrap;">{% if item.after_html %}{{ item.after_html }}{% else %}{{ item.after }}{% endif %}</pre>
             </div>
             {% endif %}
           </div>

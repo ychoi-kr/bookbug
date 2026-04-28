@@ -9,6 +9,7 @@ import sys
 import os
 import re as _re
 import json as _json
+import difflib as _difflib
 from markupsafe import Markup, escape
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -136,14 +137,53 @@ templates.env.globals["VALID_SEVERITIES"] = VALID_SEVERITIES
 templates.env.globals["FIELD_LABEL"]      = FIELD_LABEL
 
 
+_DIFF_TOKEN_RE = _re.compile(r'[가-힣]+|[A-Za-z0-9_]+|\s+|.')
+
+
+def _diff_highlight(before: str, after: str):
+    """before/after 두 문자열의 단어(토큰) 단위 diff를 계산.
+    변경된 부분만 <span>으로 감싼 (before_html, after_html) Markup 쌍을 반환.
+    토큰 기준: 연속된 한글/영숫자 run, 공백 run, 그 외 단일 문자.
+    원본 텍스트는 그대로 보존되므로 선택/복사 시 영향 없음.
+    """
+    b_tokens = _DIFF_TOKEN_RE.findall(before)
+    a_tokens = _DIFF_TOKEN_RE.findall(after)
+    matcher = _difflib.SequenceMatcher(None, b_tokens, a_tokens, autojunk=False)
+    before_parts = []
+    after_parts = []
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        b_chunk = escape("".join(b_tokens[i1:i2]))
+        a_chunk = escape("".join(a_tokens[j1:j2]))
+        if tag == "equal":
+            before_parts.append(str(b_chunk))
+            after_parts.append(str(a_chunk))
+        elif tag == "delete":
+            before_parts.append(f'<span class="diff-old">{b_chunk}</span>')
+        elif tag == "insert":
+            after_parts.append(f'<span class="diff-new">{a_chunk}</span>')
+        elif tag == "replace":
+            before_parts.append(f'<span class="diff-old">{b_chunk}</span>')
+            after_parts.append(f'<span class="diff-new">{a_chunk}</span>')
+    return Markup("".join(before_parts)), Markup("".join(after_parts))
+
+
 def parse_suggestion(value):
-    """suggestion 필드를 JSON으로 파싱. 실패 시 플레인 텍스트로 반환."""
+    """suggestion 필드를 JSON으로 파싱. 실패 시 플레인 텍스트로 반환.
+    items의 before/after가 모두 있으면 글자 단위 diff HTML도 함께 계산해 둔다.
+    """
     if not value:
         return None
     try:
         parsed = _json.loads(value)
         if isinstance(parsed, dict):
             parsed.setdefault("items", [])
+            for item in parsed["items"]:
+                if not isinstance(item, dict):
+                    continue
+                before = item.get("before") or ""
+                after = item.get("after") or ""
+                if before and after:
+                    item["before_html"], item["after_html"] = _diff_highlight(before, after)
             return parsed
     except (_json.JSONDecodeError, ValueError):
         pass
