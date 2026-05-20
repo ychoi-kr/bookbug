@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS projects (
     description TEXT DEFAULT '',
     base_path   TEXT DEFAULT '',
     team        TEXT DEFAULT '',
-    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at  TEXT DEFAULT NULL
 );
 
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS issues (
     suggestion  TEXT DEFAULT '',
     resolution  TEXT DEFAULT '',
     manuscript      TEXT DEFAULT '',
-    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
     resolved_at TEXT,
     deleted_at  TEXT DEFAULT NULL,
     UNIQUE(project_id, issue_key)
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS issue_history (
     old_value   TEXT,
     new_value   TEXT,
     changed_by  TEXT DEFAULT '',
-    changed_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    changed_at  TEXT NOT NULL DEFAULT (datetime('now')),
     note        TEXT DEFAULT ''
 );
 
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS users (
     name       TEXT NOT NULL,
     email      TEXT UNIQUE,
     api_key    TEXT UNIQUE,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS project_members (
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS issue_comments (
     kind        TEXT NOT NULL DEFAULT '',
     posted_by   TEXT NOT NULL DEFAULT '',
     body        TEXT NOT NULL DEFAULT '',
-    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_comments_issue ON issue_comments(issue_id);
 
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS issue_refs (
     ref_type   TEXT NOT NULL DEFAULT 'url',
     ref_value  TEXT NOT NULL,
     note       TEXT DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(issue_id, ref_type, ref_value)
 );
 CREATE INDEX IF NOT EXISTS idx_refs_issue ON issue_refs(issue_id);
@@ -510,7 +510,7 @@ def db_issue_amend(conn: sqlite3.Connection, issue_id: int, current_row,
                   current_row["description"], description,
                   changed_by=changed_by, note="amend")
     conn.execute(
-        "UPDATE issues SET description=?, updated_at=datetime('now','localtime') WHERE id=?",
+        "UPDATE issues SET description=?, updated_at=datetime('now') WHERE id=?",
         (description, issue_id)
     )
     conn.commit()
@@ -546,9 +546,9 @@ def db_issue_update(conn: sqlite3.Connection, issue_id: int, current_row,
         record_change(conn, issue_id, field, current_row[field], new_val, changed_by=changed_by)
 
     set_clause = ", ".join(f"{f}=?" for f in updates)
-    set_clause += ", updated_at=datetime('now','localtime')"
+    set_clause += ", updated_at=datetime('now')"
     if updates.get("status") == "resolved":
-        set_clause += ", resolved_at=datetime('now','localtime')"
+        set_clause += ", resolved_at=datetime('now')"
 
     vals = list(updates.values()) + [issue_id]
     conn.execute(f"UPDATE issues SET {set_clause} WHERE id=?", vals)
@@ -711,7 +711,7 @@ def db_project_delete(conn: sqlite3.Connection, slug: str) -> dict:
     if not p:
         return {"ok": False, "error": f"프로젝트 '{slug}'를 찾을 수 없습니다"}
     conn.execute(
-        "UPDATE projects SET deleted_at=datetime('now','localtime') WHERE id=?",
+        "UPDATE projects SET deleted_at=datetime('now') WHERE id=?",
         (p["id"],)
     )
     conn.commit()
@@ -723,10 +723,10 @@ def db_issue_delete(conn: sqlite3.Connection, key_or_id: str, deleted_by: str = 
     if not row:
         return {"ok": False, "error": f"이슈 '{key_or_id}'를 찾을 수 없습니다"}
     record_change(conn, row["id"], "deleted_at", None,
-                  "datetime('now','localtime')", changed_by=deleted_by)
+                  "datetime('now')", changed_by=deleted_by)
     conn.execute(
-        "UPDATE issues SET deleted_at=datetime('now','localtime'), "
-        "updated_at=datetime('now','localtime') WHERE id=?",
+        "UPDATE issues SET deleted_at=datetime('now'), "
+        "updated_at=datetime('now') WHERE id=?",
         (row["id"],)
     )
     conn.commit()

@@ -130,7 +130,7 @@
               {% elif c.action == "reject" %}
               <span class="badge bg-danger">거부</span>
               {% endif %}
-              <span class="text-muted small ms-auto">{{ c.created_at[:16] if c.created_at else "" }}</span>
+              <span class="text-muted small ms-auto localtime" data-time="{{ c.created_at or '' }}">{{ (c.created_at[:16] + ' UTC') if c.created_at else "" }}</span>
             </div>
             {% if c.body %}
             <div class="small" style="white-space: pre-wrap;">{{ c.body }}</div>
@@ -181,7 +181,7 @@
               <div class="tl-body pb-3">
                 <div class="tl-meta text-muted mb-1" style="font-size:.75rem">
                   <span class="fw-semibold text-body">{{ grp.changed_by or "?" }}</span>
-                  &nbsp;·&nbsp;{{ grp.changed_at[:16] if grp.changed_at else "" }}
+                  &nbsp;·&nbsp;<span class="localtime" data-time="{{ grp.changed_at or '' }}">{{ (grp.changed_at[:16] + ' UTC') if grp.changed_at else "" }}</span>
                 </div>
 
                 {% for e in grp.short %}
@@ -245,16 +245,16 @@
         {{ field("원고 파일/URL", issue.manuscript) }}
         <div class="mb-2">
           <div class="field-label">등록일</div>
-          <div class="small">{{ issue.created_at[:16] if issue.created_at else "" }}</div>
+          <div class="small localtime" data-time="{{ issue.created_at or '' }}">{{ (issue.created_at[:16] + ' UTC') if issue.created_at else "" }}</div>
         </div>
         <div class="mb-2">
           <div class="field-label">최종 수정</div>
-          <div class="small">{{ issue.updated_at[:16] if issue.updated_at else "" }}</div>
+          <div class="small localtime" data-time="{{ issue.updated_at or '' }}">{{ (issue.updated_at[:16] + ' UTC') if issue.updated_at else "" }}</div>
         </div>
         {% if issue.resolved_at %}
         <div class="mb-2">
           <div class="field-label">완료일</div>
-          <div class="small">{{ issue.resolved_at[:16] }}</div>
+          <div class="small localtime" data-time="{{ issue.resolved_at }}">{{ issue.resolved_at[:16] }} UTC</div>
         </div>
         {% endif %}
       </div>
